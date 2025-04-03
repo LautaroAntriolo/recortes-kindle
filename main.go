@@ -26,6 +26,7 @@ type Registro struct {
 }
 
 func main() {
+	
 	// Leer el archivo de texto
 	lines, err := lectura.LeerArchivo("misRecortes.txt")
 	if err != nil {
