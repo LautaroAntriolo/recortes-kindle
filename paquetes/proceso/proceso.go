@@ -9,6 +9,7 @@ import (
 
 // Recorte representa un recorte procesado.
 type Recorte struct {
+	ID          int       `json:"id"`
 	Autor       string    `json:"autor"`
 	Nombre      string    `json:"nombre"`
 	Pagina      int       `json:"pagina"`
@@ -93,14 +94,16 @@ func parseFechaEspañol(fechaStr string) (time.Time, string, string, error) {
 func ProcesoDeLineas(lines []string) ([]Recorte, error) {
 	var recortes []Recorte
 	var currentRecorte Recorte
+	currentID := 1 // Contador para los IDs
 
 	for _, line := range lines {
-		// Si encontramos un separador, guardamos el recorte actual
 		if strings.Contains(line, "==========") {
 			if currentRecorte.Autor != "" {
+				currentRecorte.ID = currentID // Asignar ID
 				recortes = append(recortes, currentRecorte)
+				currentID++ // Incrementar ID para el próximo
 				currentRecorte = Recorte{
-					Visibilidad: true, // Valor predeterminado para Visibilidad
+					Visibilidad: true,
 				}
 			}
 			continue
@@ -150,6 +153,7 @@ func ProcesoDeLineas(lines []string) ([]Recorte, error) {
 
 	// Añadir el último recorte si existe
 	if currentRecorte.Autor != "" {
+		currentRecorte.ID = currentID
 		recortes = append(recortes, currentRecorte)
 	}
 
