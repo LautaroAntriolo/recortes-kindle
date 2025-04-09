@@ -265,6 +265,8 @@ class RecortesKindleApp:
             try:
                 # Intentar parsear el JSON desde la salida estándar
                 self.registros = json.loads(process.stdout)
+                # Procesar los nombres de los libros
+                self.procesar_nombres_libros()
                 self.registros_ordenados_por_id = sorted(self.registros, key=lambda x: x["id"])
                 self.actualizar_lista_registros()
                 messagebox.showinfo("Éxito", f"Procesados {len(self.registros)} recortes")
@@ -273,6 +275,8 @@ class RecortesKindleApp:
                 try:
                     with open(temp_json_path, 'r', encoding='utf-8') as f:
                         self.registros = json.load(f)
+                    # Procesar los nombres de los libros
+                    self.procesar_nombres_libros()
                     self.registros_ordenados_por_id = sorted(self.registros, key=lambda x: x["id"])
                     self.actualizar_lista_registros()
                     messagebox.showinfo("Éxito", f"Procesados {len(self.registros)} recortes (leído de archivo temporal)")
@@ -289,7 +293,30 @@ class RecortesKindleApp:
             messagebox.showerror("Error", f"Error al procesar el archivo:\n{e.stderr}")
         except Exception as e:
             messagebox.showerror("Error", f"Error inesperado: {str(e)}")
-    
+
+    def procesar_nombres_libros(self):
+        """Procesa los nombres de los libros para mejorar su formato"""
+        for registro in self.registros:
+            # Reemplazar guiones bajos por espacios y eliminar posibles sufijos
+            nombre_libro = registro["nombre"]
+            
+            # 1. Reemplazar guiones bajos por espacios
+            nombre_libro = nombre_libro.replace('_', ' ')
+            
+            # 2. Eliminar el nombre del autor si está al final (patrón común)
+            autor = registro["autor"].split()
+            if len(autor) > 0:
+                # Intentar eliminar el apellido del autor si aparece al final del título
+                for apellido in reversed(autor):
+                    if nombre_libro.endswith(apellido):
+                        nombre_libro = nombre_libro[:-(len(apellido))].strip()
+                        break
+            
+            # 3. Capitalizar palabras (opcional)
+            nombre_libro = ' '.join(word.capitalize() for word in nombre_libro.split())
+            
+            registro["nombre"] = nombre_libro
+
     def actualizar_lista_registros(self):
         """Actualiza el Treeview con los registros actuales"""
         # Limpiar el Treeview actual
@@ -301,7 +328,7 @@ class RecortesKindleApp:
             visible = "Sí" if reg["visibilidad"] else "No"
             self.tree.insert("", tk.END, values=(
                 reg["id"],
-                reg["nombre"],
+                reg["nombre"],  # Ahora con formato mejorado
                 reg["autor"],
                 reg["pagina"],
                 visible
