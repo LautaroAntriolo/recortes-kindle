@@ -27,7 +27,7 @@ type Registro struct {
 
 func main() {
 	// Determinar qué archivo de entrada usar
-	archivoEntrada := "misRecortes.txt" // Valor por defecto
+	archivoEntrada := "My Clippings.txt" // Valor por defecto
 	archivoSalida := "notas.json"       // Valor por defecto
 
 	// Si se proporciona un argumento, usarlo como ruta del archivo
