@@ -1,3 +1,4 @@
-misRecortes.txt
+*.txt
 notas.json
-.env
+*.env
+*.json

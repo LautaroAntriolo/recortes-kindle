@@ -2,156 +2,165 @@ package proceso
 
 import (
 	"fmt"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
 )
 
+type Etiqueta struct {
+	Nombre string `json:"nombre"` // Mejor usar nombre en español en lugar de eti_nombre
+}
+
+type Etiquetas []Etiqueta // Esto está bien, es un slice de Etiqueta
+
 // Recorte representa un recorte procesado.
 type Recorte struct {
+	ID          int       `json:"id"`
 	Autor       string    `json:"autor"`
 	Nombre      string    `json:"nombre"`
 	Pagina      int       `json:"pagina"`
 	Contenido   string    `json:"contenido"`
 	Visibilidad bool      `json:"visibilidad"`
-	FechaStr    string    `json:"fecha"` // Fecha formateada como string (YYYY-MM-DD)
-	HoraStr     string    `json:"hora"`  // Hora formateada como string (HH:MM:SS)
-	DateTime    time.Time `json:"-"`     // Campo interno para cálculos (no se serializa a JSON)
+	FechaStr    string    `json:"fecha"`     // Fecha formateada como string (YYYY-MM-DD)
+	HoraStr     string    `json:"hora"`      // Hora formateada como string (HH:MM:SS)
+	DateTime    time.Time `json:"-"`         // Campo interno para cálculos (no se serializa a JSON)
+	Etiquetas   Etiquetas `json:"etiquetas"` // Ahora es un slice de Etiqueta
 }
 
-// mesesEspañol mapea nombres de meses en español a sus equivalentes numéricos
-var mesesEspañol = map[string]string{
-	"enero":      "01",
-	"febrero":    "02",
-	"marzo":      "03",
-	"abril":      "04",
-	"mayo":       "05",
-	"junio":      "06",
-	"julio":      "07",
-	"agosto":     "08",
-	"septiembre": "09",
-	"octubre":    "10",
-	"noviembre":  "11",
-	"diciembre":  "12",
-}
-
-// parseFechaEspañol convierte una fecha en formato español a time.Time
-func parseFechaEspañol(fechaStr string) (time.Time, string, string, error) {
-	// Eliminar "Añadido el " si está presente
-	fechaStr = strings.TrimPrefix(fechaStr, "Añadido el ")
-
-	// Dividir la fecha en sus componentes
-	// Ejemplo: "martes, 14 de enero de 2025 20:55:34"
-	partes := strings.Split(fechaStr, ", ")
-	if len(partes) < 2 {
-		return time.Time{}, "", "", fmt.Errorf("formato de fecha inválido: %s", fechaStr)
-	}
-
-	// Ignoramos el día de la semana y procesamos el resto
-	restoFecha := partes[1]
-
-	// Dividir en fecha y hora
-	partesDateTime := strings.Split(restoFecha, " ")
-	if len(partesDateTime) < 5 {
-		return time.Time{}, "", "", fmt.Errorf("formato de fecha y hora inválido: %s", restoFecha)
-	}
-
-	dia := partesDateTime[0]
-	// Ignoramos "de"
-	mes := partesDateTime[2]
-	// Ignoramos "de"
-	año := partesDateTime[4]
-	hora := ""
-	if len(partesDateTime) > 5 {
-		hora = partesDateTime[5]
-	}
-
-	// Convertir mes de texto a número
-	mesNum, ok := mesesEspañol[strings.ToLower(mes)]
-	if !ok {
-		return time.Time{}, "", "", fmt.Errorf("mes inválido: %s", mes)
-	}
-
-	// Formatear la fecha en formato ISO 8601 pero sin la T y Z
-	fechaISO := fmt.Sprintf("%s-%s-%s %s", año, mesNum, dia, hora)
-
-	// Crear strings formateados para la fecha y la hora
-	fechaStr = fmt.Sprintf("%s-%s-%s", año, mesNum, dia)
-	horaStr := hora
-
-	// Parsear la fecha formateada
-	layout := "2006-01-02 15:04:05"
-	t, err := time.Parse(layout, fechaISO)
-	if err != nil {
-		return time.Time{}, "", "", err
-	}
-
-	return t, fechaStr, horaStr, nil
-}
-
+// ProcesoDeLineas convierte las líneas en una lista de recortes ordenada.
 // ProcesoDeLineas convierte las líneas en una lista de recortes ordenada.
 func ProcesoDeLineas(lines []string) ([]Recorte, error) {
 	var recortes []Recorte
 	var currentRecorte Recorte
+	currentID := 1 // Contador para los IDs
+	inContent := false
 
 	for _, line := range lines {
-		// Si encontramos un separador, guardamos el recorte actual
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+
+		// Si encontramos el separador, finalizamos el recorte actual y comenzamos uno nuevo
 		if strings.Contains(line, "==========") {
 			if currentRecorte.Autor != "" {
+				currentRecorte.ID = currentID
+				currentRecorte.Visibilidad = true
 				recortes = append(recortes, currentRecorte)
+				currentID++
 				currentRecorte = Recorte{
-					Visibilidad: true, // Valor predeterminado para Visibilidad
+					Visibilidad: true,
 				}
 			}
+			inContent = false
 			continue
 		}
 
-		// Procesar la línea con el título y autor
-		if strings.HasPrefix(line, "- La subrayado") {
-			parts := strings.Split(line, "en la página ")
-			if len(parts) > 1 {
-				pageInfo := strings.Split(parts[1], " ")
-				if len(pageInfo) > 0 {
-					pageStr := strings.TrimSpace(pageInfo[0])
-					pageStr = strings.Split(pageStr, "|")[0] // Por si hay un separador
-					currentRecorte.Pagina, _ = strconv.Atoi(pageStr)
-				}
-			}
-
-			// Extraer la fecha de la línea
-			dateParts := strings.Split(line, "Añadido el ")
-			if len(dateParts) > 1 {
-				dateStr := strings.TrimSpace(dateParts[1])
-				parsedTime, fechaStr, horaStr, err := parseFechaEspañol(dateStr)
-				if err == nil {
-					currentRecorte.DateTime = parsedTime
-					currentRecorte.FechaStr = fechaStr
-					currentRecorte.HoraStr = horaStr
-				}
-			}
-			continue
-		}
-
-		// Procesar la información del autor y nombre
-		if currentRecorte.Autor == "" {
+		// Procesar la línea con el nombre del libro y autor (siempre es la primera línea de un recorte)
+		if !inContent && strings.Contains(line, "(") && strings.HasSuffix(line, ")") && currentRecorte.Autor == "" {
 			parts := strings.Split(line, "(")
 			if len(parts) > 1 {
-				currentRecorte.Nombre = strings.TrimSpace(parts[0])
-				currentRecorte.Autor = strings.TrimRight(parts[1], ")")
+				bookName := strings.TrimSpace(parts[0])
+				authorPart := parts[len(parts)-1]
+				author := strings.TrimSuffix(authorPart, ")")
+
+				currentRecorte.Nombre = bookName
+				currentRecorte.Autor = strings.TrimSpace(author)
 			}
 			continue
 		}
 
-		// Procesar el contenido del recorte
-		if currentRecorte.Autor != "" && currentRecorte.Contenido == "" {
-			currentRecorte.Contenido = strings.TrimSpace(line)
+		// Procesar la línea con página y fecha
+		if !inContent && strings.Contains(line, "página") && (strings.Contains(line, "subrayado") || strings.Contains(line, "recorte")) {
+			// Extraer número de página
+			pageRegex := regexp.MustCompile(`página (\d+)`)
+			pageMatches := pageRegex.FindStringSubmatch(line)
+			if len(pageMatches) > 1 {
+				if pageNum, err := strconv.Atoi(pageMatches[1]); err == nil {
+					currentRecorte.Pagina = pageNum
+				}
+			}
+
+			// Extraer fecha y hora
+			if strings.Contains(line, "Añadido el") {
+				dateRegex := regexp.MustCompile(`Añadido el ([^,]+, \d+ de [^ ]+ de \d+) (\d+:\d+:\d+)`)
+				dateMatches := dateRegex.FindStringSubmatch(line)
+				if len(dateMatches) > 2 {
+					fechaStr := dateMatches[1]
+					horaStr := dateMatches[2]
+
+					currentRecorte.FechaStr = convertirFechaEspanolAISO(fechaStr)
+					currentRecorte.HoraStr = horaStr
+
+					// Parsear fecha y hora completa para DateTime
+					layout := "2006-01-02 15:04:05"
+					fechaHora := fmt.Sprintf("%s %s", currentRecorte.FechaStr, currentRecorte.HoraStr)
+					if t, err := time.Parse(layout, fechaHora); err == nil {
+						currentRecorte.DateTime = t
+					}
+				}
+			}
+			// Después de procesar la línea con página y fecha, las líneas siguientes son contenido
+			inContent = true
+			continue
+		}
+
+		// Procesar el contenido del recorte (después de la línea de página/fecha)
+		if inContent && currentRecorte.Autor != "" {
+			if currentRecorte.Contenido == "" {
+				currentRecorte.Contenido = line
+			} else {
+				currentRecorte.Contenido += "\n" + line
+			}
 		}
 	}
 
 	// Añadir el último recorte si existe
 	if currentRecorte.Autor != "" {
+		currentRecorte.ID = currentID
+		currentRecorte.Visibilidad = true
 		recortes = append(recortes, currentRecorte)
 	}
 
 	return recortes, nil
+}
+
+// Función auxiliar para convertir fechas del formato español al formato ISO YYYY-MM-DD
+func convertirFechaEspanolAISO(fechaEsp string) string {
+	// Mapeo de nombres de meses en español a números
+	mesesMap := map[string]string{
+		"enero":      "01",
+		"febrero":    "02",
+		"marzo":      "03",
+		"abril":      "04",
+		"mayo":       "05",
+		"junio":      "06",
+		"julio":      "07",
+		"agosto":     "08",
+		"septiembre": "09",
+		"octubre":    "10",
+		"noviembre":  "11",
+		"diciembre":  "12",
+	}
+
+	// Extraer componentes de la fecha
+	re := regexp.MustCompile(`(\w+), (\d+) de (\w+) de (\d+)`)
+	matches := re.FindStringSubmatch(fechaEsp)
+
+	if len(matches) < 5 {
+		return fechaEsp // Devolver la fecha original si no se puede procesar
+	}
+
+	dia := matches[2]
+	mes := mesesMap[matches[3]]
+	ano := matches[4]
+
+	// Asegurarse de que el día tenga dos dígitos
+	if len(dia) == 1 {
+		dia = "0" + dia
+	}
+
+	// Formato ISO: YYYY-MM-DD
+	return fmt.Sprintf("%s-%s-%s", ano, mes, dia)
 }
