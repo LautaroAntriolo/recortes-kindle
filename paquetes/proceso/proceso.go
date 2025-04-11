@@ -7,6 +7,12 @@ import (
 	"time"
 )
 
+type Etiqueta struct {
+	Nombre string `json:"nombre"`
+}
+
+type Etiquetas []Etiqueta
+
 // Recorte representa un recorte procesado.
 type Recorte struct {
 	ID          int       `json:"id"`
@@ -18,6 +24,7 @@ type Recorte struct {
 	FechaStr    string    `json:"fecha"` // Fecha formateada como string (YYYY-MM-DD)
 	HoraStr     string    `json:"hora"`  // Hora formateada como string (HH:MM:SS)
 	DateTime    time.Time `json:"-"`     // Campo interno para cálculos (no se serializa a JSON)
+	Etiqueta    Etiquetas `json:"etiqueta"`
 }
 
 // ProcesoDeLineas convierte las líneas en una lista de recortes ordenada.
@@ -77,7 +84,7 @@ func ProcesoDeLineas(lines []string) ([]Recorte, error) {
 				if len(dateTimeParts) == 2 {
 					currentRecorte.FechaStr = strings.TrimSpace(dateTimeParts[0])
 					currentRecorte.HoraStr = strings.TrimSpace(dateTimeParts[1])
-					
+
 					// Parsear fecha y hora completa para DateTime
 					layout := "2006-01-02 15:04:05"
 					fechaHora := fmt.Sprintf("%s %s", currentRecorte.FechaStr, currentRecorte.HoraStr)
