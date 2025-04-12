@@ -2,3 +2,4 @@
 notas.json
 *.env
 *.json
+/obsidian-graph

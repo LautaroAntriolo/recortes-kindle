@@ -3,11 +3,12 @@ package analisis
 import (
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"strings"
 )
 
 // Estructura que representa cada elemento del JSON
-type Nota struct {
+type Documento struct {
 	ID          int     `json:"id"`
 	Autor       string  `json:"autor"`
 	Nombre      string  `json:"nombre"`
@@ -19,29 +20,43 @@ type Nota struct {
 	Etiquetas   *string `json:"etiquetas"`
 }
 
-func Similitudes(jsonData []byte, busqueda string) ([]Nota, []byte, error) {
-	// Decodificar JSON original
-	var notas []Nota
-	if err := json.Unmarshal(jsonData, &notas); err != nil {
-		return nil, nil, fmt.Errorf("error decodificando JSON: %v", err)
+func Similitudes(jsonInfo []byte, terminoBusqueda string) ([]Documento, []byte, error) {
+	// Deserializar el JSON de entrada
+	var documentos []Documento
+	if err := json.Unmarshal(jsonInfo, &documentos); err != nil {
+		return nil, nil, fmt.Errorf("error al deserializar JSON: %v", err)
 	}
 
-	// Filtrar resultados (búsqueda case-insensitive)
-	var resultados []Nota
-	busqueda = strings.ToLower(busqueda)
+	// Si no hay término de búsqueda, devolver todo con formato
+	if strings.TrimSpace(terminoBusqueda) == "" {
+		jsonFormateado, err := json.MarshalIndent(documentos, "", "    ")
+		if err != nil {
+			return nil, nil, fmt.Errorf("error al formatear JSON: %v", err)
+		}
+		return documentos, jsonFormateado, nil
+	}
 
-	for _, nota := range notas {
-		if strings.Contains(strings.ToLower(nota.Autor), busqueda) ||
-			strings.Contains(strings.ToLower(nota.Nombre), busqueda) ||
-			strings.Contains(strings.ToLower(nota.Contenido), busqueda) {
-			resultados = append(resultados, nota)
+	// Preparar la expresión regular para búsqueda exacta
+	termino := strings.ToLower(strings.TrimSpace(terminoBusqueda))
+	regex, err := regexp.Compile(fmt.Sprintf(`(?i)\b%s\b`, regexp.QuoteMeta(termino)))
+	if err != nil {
+		return nil, nil, fmt.Errorf("error en término de búsqueda: %v", err)
+	}
+
+	// Filtrar documentos
+	var resultados []Documento
+	for _, doc := range documentos {
+		if regex.MatchString(strings.ToLower(doc.Autor)) ||
+			regex.MatchString(strings.ToLower(doc.Nombre)) ||
+			regex.MatchString(strings.ToLower(doc.Contenido)) {
+			resultados = append(resultados, doc)
 		}
 	}
 
-	// Convertir resultados a JSON
-	jsonResultados, err := json.MarshalIndent(resultados, "", "  ")
+	// Generar JSON con indentación
+	jsonResultados, err := json.MarshalIndent(resultados, "", " ")
 	if err != nil {
-		return resultados, nil, fmt.Errorf("error generando JSON: %v", err)
+		return nil, nil, fmt.Errorf("error al generar JSON: %v", err)
 	}
 
 	return resultados, jsonResultados, nil
