@@ -4,10 +4,10 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
 	"log"
 	"os"
+	"recortesKindle/paquetes/analisis"
 	"recortesKindle/paquetes/escritura"
 	"recortesKindle/paquetes/lectura"
 	"recortesKindle/paquetes/proceso"
@@ -28,7 +28,7 @@ type Registro struct {
 func main() {
 	// Determinar qué archivo de entrada usar
 	archivoEntrada := "My Clippings.txt" // Valor por defecto
-	archivoSalida := "notas.json"       // Valor por defecto
+	archivoSalida := "notas.json"        // Valor por defecto
 
 	// Si se proporciona un argumento, usarlo como ruta del archivo
 	if len(os.Args) > 1 {
@@ -53,21 +53,22 @@ func main() {
 	}
 
 	// Escribir los recortes en un archivo JSON
-	err = escritura.EscribirJSON(archivoSalida, recortes)
+	jsonInfo, err := escritura.EscribirJSON(archivoSalida, recortes)
 	if err != nil {
 		log.Fatalf("Error al escribir el archivo JSON: %v", err)
 	}
 
-	// Mostrar el JSON en la salida estándar para que Python lo pueda capturar
-	contenidoJSON, err := os.ReadFile(archivoSalida)
+	terminoBusqueda := "amor"
+	resultados, jsonFiltrado, err := analisis.Similitudes(jsonInfo, terminoBusqueda)
 	if err != nil {
-		log.Fatalf("Error al leer el archivo JSON generado: %v", err)
+		log.Fatal("Error buscando coincidencias:", err)
 	}
-	fmt.Print(string(contenidoJSON))
 
-	jsonData, err := json.MarshalIndent(recortes, "", "  ")
-	if err != nil {
-		log.Fatalf("Error al convertir a JSON: %v", err)
+	// 3. Escribir el archivo con resultados (controlado desde main)
+	if err := os.WriteFile("similitudes.json", jsonFiltrado, 0644); err != nil {
+		log.Fatal("Error guardando resultados:", err)
 	}
-	fmt.Print(string(jsonData))
+
+	fmt.Printf("✔ Se encontraron %d resultados\n✔ Guardados en: similitudes\n", len(resultados))
+
 }
