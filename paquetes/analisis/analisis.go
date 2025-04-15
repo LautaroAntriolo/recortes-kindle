@@ -3,26 +3,14 @@ package analisis
 import (
 	"encoding/json"
 	"fmt"
+	"recortesKindle/paquetes/modelos"
 	"regexp"
 	"strings"
 )
 
-// Estructura que representa cada elemento del JSON
-type Documento struct {
-	ID          int     `json:"id"`
-	Autor       string  `json:"autor"`
-	Nombre      string  `json:"nombre"`
-	Pagina      int     `json:"pagina"`
-	Contenido   string  `json:"contenido"`
-	Visibilidad bool    `json:"visibilidad"`
-	Fecha       string  `json:"fecha"`
-	Hora        string  `json:"hora"`
-	Etiquetas   *string `json:"etiquetas"`
-}
-
-func Similitudes(jsonInfo []byte, terminoBusqueda string) ([]Documento, []byte, error) {
+func Similitudes(jsonInfo []byte, terminoBusqueda string) ([]modelos.Documento, []byte, error) {
 	// Deserializar el JSON de entrada
-	var documentos []Documento
+	var documentos []modelos.Documento
 	if err := json.Unmarshal(jsonInfo, &documentos); err != nil {
 		return nil, nil, fmt.Errorf("error al deserializar JSON: %v", err)
 	}
@@ -44,7 +32,7 @@ func Similitudes(jsonInfo []byte, terminoBusqueda string) ([]Documento, []byte, 
 	}
 
 	// Filtrar documentos
-	var resultados []Documento
+	var resultados []modelos.Documento
 	for _, doc := range documentos {
 		if regex.MatchString(strings.ToLower(doc.Autor)) ||
 			regex.MatchString(strings.ToLower(doc.Nombre)) ||
