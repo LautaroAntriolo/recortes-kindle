@@ -19,24 +19,25 @@ import (
 
 func main() {
 	// Determinar qué archivo de entrada usar
-	archivoEntrada := "recortes.txt" // Valor por defecto
-	archivoSalida := "notas.json"    // Valor por defecto
+	archivoEntrada := "datos/entrada/recortes.txt" // Valor por defecto
+	archivoSalida := "datos/salida/notas.json"     // Valor por defecto
 	terminoBusqueda := ""
 
-	// Si se proporciona un argumento, usarlo como ruta del archivo
-	if len(os.Args) > 1 {
-		archivoEntrada = os.Args[1]
-	}
+	// //Si se proporciona un argumento, usarlo como ruta del archivo
+	// if len(os.Args) > 1 {
+	// 	archivoEntrada = os.Args[1]
+	// }
 
-	// Si se proporciona un segundo argumento, usarlo como resultado de salida
-	if len(os.Args) > 2 {
-		archivoSalida = os.Args[2]
-	}
+	// //Si se proporciona un segundo argumento, usarlo como resultado de salida
+	// if len(os.Args) > 2 {
+	// 	// archivoSalida = os.Args[2]
+	// 	terminoBusqueda = os.Args[2]
+	// }
 
-	// Si se proporciona un tercer argumento, usarlo como termino de busqueda
-	if len(os.Args) > 3 {
-		terminoBusqueda = os.Args[3]
-	}
+	// //Si se proporciona un tercer argumento, usarlo como termino de busqueda
+	// if len(os.Args) > 3 {
+	// 	terminoBusqueda = os.Args[3]
+	// }
 
 	// Leer el archivo de texto
 	lines, err := lectura.LeerArchivo(archivoEntrada)
@@ -55,64 +56,60 @@ func main() {
 	if err != nil {
 		log.Fatalf("Error al escribir el archivo JSON: %v", err)
 	}
-
-	resultados, jsonFiltrado, err := analisis.Similitudes(jsonInfo, terminoBusqueda)
-	if err != nil {
-		log.Fatal("Error buscando coincidencias:", err)
-	}
-
-	if err := os.WriteFile("similitudes.json", jsonFiltrado, 0644); err != nil {
-		log.Fatal("Error guardando resultados:", err)
-	}
-
-	fmt.Printf("✔ Se encontraron %d resultados\n✔ Guardados en: similitudes\n", len(resultados))
-
-	var docs []modelos.Documento
-	err = json.Unmarshal(jsonFiltrado, &docs)
-	if err != nil {
-		// Verifica si es un solo documento
-		var singleDoc modelos.Documento
-		if err := json.Unmarshal(jsonFiltrado, &singleDoc); err != nil {
-			log.Fatalf("Error al deserializar JSON: %v", err)
+	docs := []modelos.Documento{}
+	if terminoBusqueda != "" {
+		// A partir de acá comienzo a realizar las funcionalidades desde el html.
+		resultados, resultadoAnalisis, err := analisis.Similitudes(jsonInfo, terminoBusqueda)
+		if err != nil {
+			log.Fatal("Error buscando coincidencias:", err)
 		}
-		docs = []modelos.Documento{singleDoc} // Convierte a slice con un elemento
+
+		// Convertir el resultado completo a JSON
+		jsonCompleto, err := json.MarshalIndent(resultadoAnalisis, "", "    ")
+		if err != nil {
+			log.Fatal("Error al generar JSON:", err)
+		}
+
+		if err := os.WriteFile("similitudes/por_palabra/"+terminoBusqueda+"_resultado.json", jsonCompleto, 0644); err != nil {
+			log.Fatal("Error guardando resultados:", err)
+		}
+
+		fmt.Printf("✔ Se encontraron %d resultados\n✔ Guardados en: similitudes\n", len(resultados))
+
+		var docs []modelos.Documento
+		err = json.Unmarshal(jsonCompleto, &docs)
+		if err != nil {
+			// Verifica si es un solo documento
+			var singleDoc modelos.Documento
+			if err := json.Unmarshal(jsonCompleto, &singleDoc); err != nil {
+				log.Fatalf("Error al deserializar JSON: %v", err)
+			}
+			docs = []modelos.Documento{singleDoc} // Convierte a slice con un elemento
+		}
 	}
 
-	// Desde acá, creo el archivo HTML y le inserto los nodos.
-	file, err := os.Create("diagrama.html")
+	// Cargar y ejecutar la plantilla
+	t, err := template.ParseFiles("templates/index.html")
 	if err != nil {
-		panic(err)
+		log.Fatalf("Error al cargar plantilla: %v", err)
 	}
-	defer file.Close()
 
-	// Plantilla corregida
-	tmpl := `
-	<!DOCTYPE html>
-	<html>
-	<head>
-		<title>Mapa de Documentos</title>
-	</head>
-	<main>
-		<center>
-			<h1>Acá irán todos los nodos</h1>
-		</center>
-	</main>
-	<html>
-	`
+	// Configurar el manejador HTTP
+	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		err := t.Execute(w, docs)
+		if err != nil {
+			http.Error(w, "Error al renderizar plantilla", http.StatusInternalServerError)
+			log.Printf("Error al ejecutar plantilla: %v", err)
+		}
+	})
 
-	t := template.Must(template.New("diagrama.html").Parse(tmpl))
-	if err := t.Execute(file, docs); err != nil {
-		log.Fatalf("Error al ejecutar plantilla: %v", err)
-	}
+	// Configurar archivos estáticos (opcional, si tienes CSS/JS)
+	http.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("static"))))
 
 	fmt.Println("🚀 Servidor iniciado en http://localhost:8080")
 	fmt.Println("Presiona Ctrl+C para detenerlo")
 
-	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		http.ServeFile(w, r, "diagrama.html")
-	})
-
-	// Bloquea aquí y sirve el archivo HTML hasta que lo detengas
+	// Iniciar el servidor
 	if err := http.ListenAndServe(":8080", nil); err != nil {
 		log.Fatalf("Error al iniciar servidor: %v", err)
 	}
