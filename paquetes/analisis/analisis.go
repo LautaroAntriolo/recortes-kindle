@@ -56,7 +56,14 @@ func contarDocumentosConEtiquetas(documentos []modelos.Documento) int {
 	}
 	return count
 }
-
+func matchInSlice(regex *regexp.Regexp, items []string) bool {
+    for _, item := range items {
+        if regex.MatchString(strings.ToLower(item)) {
+            return true
+        }
+    }
+    return false
+}
 func Similitudes(jsonInfo []byte, terminoBusqueda string) ([]modelos.Documento, *modelos.ResultadoAnalisis, error) {
 	// Deserializar el JSON de entrada
 	var documentos []modelos.Documento
@@ -98,7 +105,8 @@ func Similitudes(jsonInfo []byte, terminoBusqueda string) ([]modelos.Documento, 
 	for _, doc := range documentos {
 		if regex.MatchString(strings.ToLower(doc.Autor)) ||
 			regex.MatchString(strings.ToLower(doc.Nombre)) ||
-			regex.MatchString(strings.ToLower(doc.Contenido)) {
+			regex.MatchString(strings.ToLower(doc.Contenido)) || 
+			matchInSlice(regex, doc.Etiquetas) {
 			resultados = append(resultados, doc)
 
 			// Agregar a índices solo si coincide

@@ -29,7 +29,6 @@ type Recorte struct {
 }
 
 // ProcesoDeLineas convierte las líneas en una lista de recortes ordenada.
-// ProcesoDeLineas convierte las líneas en una lista de recortes ordenada.
 func ProcesoDeLineas(lines []string) ([]Recorte, error) {
 	var recortes []Recorte
 	var currentRecorte Recorte
