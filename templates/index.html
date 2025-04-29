@@ -1,81 +1,76 @@
 <!DOCTYPE html>
 <html lang="es">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Tabla de Resultados con Paginación</title>
-    <link rel="stylesheet" href="static/css/style.css" />
-  </head>
-  <body>
-    <h1>Resultados de Similitudes</h1>
-
-    <div class="controls-container">
-      <!-- Contenedor de búsqueda -->
-      <div class="search-container">
-        <input
-          type="text"
-          id="input-palabra"
-          placeholder="Ingresa una palabra para buscar..."
-        />
-        <button id="search-button">Buscar</button>
-      </div>
-
-      <!-- Contenedor para cargar archivos -->
-      <div class="file-upload-container">
-        <label for="file-upload" class="file-upload-button">
-          <span>Cargar archivo .txt</span>
-          <input
-            type="file"
-            id="file-upload"
-            accept=".txt"
-            style="display: none"
-          />
-        </label>
-        <span id="file-name" class="file-name-display"
-          >Ningún archivo seleccionado</span
-        >
-      </div>
-
-      <!-- Controles de paginación -->
-      <div class="pagination-controls">
-        <span>Mostrar:</span>
-        <select id="items-per-page">
-          <option value="5">5</option>
-          <option value="10" selected>10</option>
-          <option value="15">15</option>
-          <option value="20">20</option>
-          <option value="30">30</option>
-        </select>
-        <span>registros</span>
-      </div>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Mis Recortes</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css"/>
+  <link rel="stylesheet" href="static/css/style.css" />
+</head>
+<body>
+  <h1>Mis recortes</h1>
+  <div class="controls-container">
+    <!-- Cargar archivo -->
+    <div class="control-group upload-group">
+      <form action="/cargar-archivo" method="post" enctype="multipart/form-data" id="upload-form" class="upload-form">
+        <div class="file-upload-wrapper">
+          <label for="file-upload" class="file-upload-button">
+            <i class="fas fa-file-upload"></i> Seleccionar TXT
+            <input type="file" id="file-upload" name="archivo" accept=".txt" class="file-input"/>
+          </label>
+          <button type="submit" class="btn btn-success upload-submit">
+            <i class="fas fa-cloud-upload-alt"></i> Cargar
+          </button>
+        </div>
+      </form>
     </div>
-
-    <div class="table-container">
-      <table id="data-table">
-        <thead>
-          <tr>
-            <th>Autor</th>
-            <th>Nombre</th>
-            <th>Contenido</th>
-            <th>Fecha</th>
-          </tr>
-        </thead>
-        <tbody id="table-body">
-          <tr class="no-data">
-            <td colspan="4">
-              Ingresa una palabra para buscar o espera los resultados...
-            </td>
-          </tr>
-        </tbody>
-      </table>
+    <!-- Buscar -->
+    <div class="control-group search-group">
+      <input type="text" id="input-palabra" placeholder="Buscar palabra..." class="form-input"/>
+      <button id="search-button" class="btn btn-primary">
+        <i class="fas fa-search"></i> Buscar
+      </button>
     </div>
-
-    <div class="page-info" id="page-info"></div>
-
-    <div class="pagination" id="pagination">
-      <!-- Los botones de paginación se generarán aquí -->
+    <!-- Selector de archivos -->
+    <div class="control-group select-group">
+      <select id="selector-archivos" class="form-select">
+        <option value="">Seleccionar archivo...</option>
+      </select>
     </div>
-
-    <script src="static/js/app.js" defer></script>
-  </body>
+    <!-- Paginación -->
+    <div class="control-group pagination-group">
+      <label for="items-per-page" class="pagination-label">Mostrar:</label>
+      <select id="items-per-page" class="form-select">
+        <option value="5">5</option>
+        <option value="10" selected>10</option>
+        <option value="15">15</option>
+        <option value="20">20</option>
+        <option value="30">30</option>
+      </select>
+      <span class="pagination-text">registros</span>
+    </div>
+  </div>
+  <div class="table-container">
+    <table id="data-table">
+      <thead>
+        <tr>
+          <th>Autor</th>
+          <th>Nombre</th>
+          <th>Contenido</th>
+          <th>Fecha</th>
+        </tr>
+      </thead>
+      <tbody id="table-body">
+        <tr class="no-data">
+          <td colspan="4">
+            Ingresa una palabra para buscar o espera los resultados...
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="page-info" id="page-info"></div>
+  <div class="pagination" id="pagination"></div>
+  <script src="static/js/app.js"></script>
+</body>
 </html>
