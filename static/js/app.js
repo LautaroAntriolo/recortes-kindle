@@ -1,223 +1,234 @@
-// Variables globales para el estado de la paginación
-let currentPage = 1;
-let itemsPerPage = 10;
-let allData = [];
-let filteredData = [];
-
-// Elementos del DOM
-const elements = {
-  inputPalabra: document.getElementById('input-palabra'),
-  searchButton: document.getElementById('search-button'),
-  itemsPerPageSelect: document.getElementById('items-per-page'),
-  tableBody: document.getElementById('table-body'),
-  paginationContainer: document.getElementById('pagination'),
-  pageInfo: document.getElementById('page-info')
-};
-
-// Event Listeners
-function setupEventListeners() {
-  elements.searchButton.addEventListener('click', buscarPalabra);
-  elements.inputPalabra.addEventListener('keypress', (e) => {
-    if (e.key === 'Enter') buscarPalabra();
-  });
-  elements.itemsPerPageSelect.addEventListener('change', changeItemsPerPage);
-}
-
-// Cargar datos iniciales
-async function cargarTabla() {
-  try {
-    const response = await fetch("/data");
-    allData = await response.json();
-    filteredData = [...allData];
+// Función para configurar el selector de archivos
+function configurarSelectorArchivos() {
+    const selector = document.getElementById('selector-archivos');
     
-    if (allData.length === 0) {
-      showNoDataMessage("No se encontraron resultados");
-      return;
-    }
-    
-    updatePagination();
-    renderTable();
-  } catch (error) {
-    console.error("Error cargando los datos:", error);
-    showNoDataMessage("Error al cargar los datos");
-  }
-}
-
-// Función para buscar palabras
-async function loadData(palabra) {
-  try {
-    const response = await fetch(
-      `/similitudes/${encodeURIComponent(palabra)}`
-    );
-    if (!response.ok) {
-      throw new Error("No se pudieron cargar los datos");
-    }
-
-    allData = await response.json();
-    filteredData = [...allData];
-    currentPage = 1; // Resetear a la primera página
-    
-    if (filteredData.length === 0) {
-      showNoDataMessage(`No se encontraron resultados para "${palabra}"`);
-      return;
-    }
-    
-    updatePagination();
-    renderTable();
-  } catch (error) {
-    console.error("Error cargando los datos:", error);
-    showNoDataMessage(`Error al buscar "${palabra}"`);
-  }
-}
-
-// Función de búsqueda
-function buscarPalabra() {
-  const palabra = elements.inputPalabra.value.trim();
-  
-  if (palabra !== "") {
-    loadData(palabra);
-  } else {
-    if (allData && allData.length > 0) {
-      filteredData = [...allData];
-      currentPage = 1;
-      updatePagination();
-      renderTable();
-    } else {
-      cargarTabla();
-    }
-  }
-}
-
-// Función para renderizar la tabla
-function renderTable() {
-  elements.tableBody.innerHTML = '';
-  
-  const startIndex = (currentPage - 1) * itemsPerPage;
-  const endIndex = startIndex + itemsPerPage;
-  const pageData = filteredData.slice(startIndex, endIndex);
-  
-  if (pageData.length === 0) {
-    showNoDataMessage("No hay datos para mostrar en esta página");
-    return;
-  }
-  
-  pageData.forEach((item) => {
-    const row = document.createElement("tr");
-
-    ['autor', 'nombre', 'contenido', 'fecha'].forEach(key => {
-      const cell = document.createElement("td");
-      cell.textContent = item[key] || "-";
-      row.appendChild(cell);
+    selector.addEventListener('change', async function() {
+        const archivoSeleccionado = this.value;
+        if (!archivoSeleccionado) {
+            const tbody = document.getElementById('tabla-recortes');
+            tbody.innerHTML = ''; // Limpiar tabla existente
+        };
+        
+        try {
+            // Enviar el nombre del archivo .txt (la API lo convertirá a .json)
+            const response = await fetch(`/archivo/${encodeURIComponent(archivoSeleccionado)}`);
+            
+            if (!response.ok) {
+                throw new Error(`Error ${response.status}: ${response.statusText}`);
+            }
+            
+            // Primero obtener la respuesta como texto para poder inspeccionarla
+            const textoRespuesta = await response.text();
+            
+            // Depuración - mostrar la respuesta completa para diagnóstico
+            console.log("Respuesta completa del servidor:", textoRespuesta);
+            
+            // Intentar extraer solo la parte JSON de la respuesta
+            let jsonLimpio;
+            
+            try {
+                // Método 1: Buscar el primer carácter válido de JSON (normalmente '{' o '[')
+                let inicioJSON = -1;
+                const posibleInicio1 = textoRespuesta.indexOf('{');
+                const posibleInicio2 = textoRespuesta.indexOf('[');
+                
+                if (posibleInicio1 >= 0 && (posibleInicio2 < 0 || posibleInicio1 < posibleInicio2)) {
+                    inicioJSON = posibleInicio1;
+                } else if (posibleInicio2 >= 0) {
+                    inicioJSON = posibleInicio2;
+                }
+                
+                if (inicioJSON > 0) {
+                    console.log(`Encontrado texto no JSON al inicio. Eliminando los primeros ${inicioJSON} caracteres.`);
+                    jsonLimpio = textoRespuesta.substring(inicioJSON);
+                } else {
+                    jsonLimpio = textoRespuesta;
+                }
+                
+                // Método 2: Si el método 1 falla, intentar extraer usando expresiones regulares
+                if (jsonLimpio.indexOf('{') < 0 && jsonLimpio.indexOf('[') < 0) {
+                    const regexJSON = /[\[\{].*[\]\}]/s;
+                    const coincidencias = textoRespuesta.match(regexJSON);
+                    if (coincidencias && coincidencias[0]) {
+                        console.log("Extrayendo JSON usando regex");
+                        jsonLimpio = coincidencias[0];
+                    }
+                }
+                
+                // Método 3: Intentar eliminar el nombre del archivo del inicio
+                if (archivoSeleccionado && textoRespuesta.includes(archivoSeleccionado)) {
+                    const nombreSinExt = archivoSeleccionado.replace(/\.\w+$/, '');
+                    if (textoRespuesta.includes(nombreSinExt)) {
+                        console.log(`La respuesta contiene el nombre del archivo (${nombreSinExt}), intentando eliminarlo`);
+                        const despuesDelNombre = textoRespuesta.indexOf(nombreSinExt) + nombreSinExt.length;
+                        jsonLimpio = textoRespuesta.substring(despuesDelNombre);
+                        
+                        // Buscar nuevamente el inicio del JSON
+                        const nuevoInicio = Math.min(
+                            jsonLimpio.indexOf('{') >= 0 ? jsonLimpio.indexOf('{') : Number.MAX_SAFE_INTEGER,
+                            jsonLimpio.indexOf('[') >= 0 ? jsonLimpio.indexOf('[') : Number.MAX_SAFE_INTEGER
+                        );
+                        
+                        if (nuevoInicio < Number.MAX_SAFE_INTEGER) {
+                            jsonLimpio = jsonLimpio.substring(nuevoInicio);
+                        }
+                    }
+                }
+                
+                // Ahora intentar parsear el JSON limpio
+                console.log("Intentando parsear:", jsonLimpio.substring(0, 50) + "...");
+                const datos = JSON.parse(jsonLimpio);
+                
+                // Mostrar los datos en la tabla
+                mostrarDatosEnTabla(datos);
+                
+            } catch (parseError) {
+                console.error("Error al parsear JSON:", parseError);
+                
+                // Intento final: Si el archivo parece ser texto plano, crear un JSON manualmente
+                try {
+                    console.log("Intentando convertir texto plano a JSON");
+                    
+                    // Dividir por líneas y crear objetos
+                    const lineas = textoRespuesta.split('\n').filter(l => l.trim());
+                    
+                    if (lineas.length > 0) {
+                        // Verificar si la primera línea podría ser un encabezado
+                        const primeraLinea = lineas[0];
+                        const camposEncabezado = primeraLinea.split(/[\t,;|]/).map(c => c.trim());
+                        
+                        // Crear un array de objetos
+                        const datos = [];
+                        
+                        for (let i = 1; i < lineas.length; i++) {
+                            const valores = lineas[i].split(/[\t,;|]/);
+                            const obj = {};
+                            
+                            // Asignar valores usando encabezados o índices
+                            for (let j = 0; j < Math.max(camposEncabezado.length, valores.length); j++) {
+                                const clave = j < camposEncabezado.length ? camposEncabezado[j] : `campo${j+1}`;
+                                const valor = j < valores.length ? valores[j].trim() : '';
+                                obj[clave] = valor;
+                            }
+                            
+                            // Asegurar que tiene al menos un id
+                            if (!obj.id) obj.id = `item-${i}`;
+                            
+                            datos.push(obj);
+                        }
+                        
+                        mostrarDatosEnTabla(datos);
+                        return;
+                    }
+                } catch (finalError) {
+                    console.error("Todos los intentos de parseo fallaron:", finalError);
+                    throw new Error("No se pudo procesar el contenido del archivo");
+                }
+                
+                throw parseError;
+            }
+            
+        } catch (error) {
+            console.error('Error al cargar el archivo:', error);
+            // alert('Error al cargar el archivo: ' + error.message);
+        }
     });
-
-    elements.tableBody.appendChild(row);
-  });
-  
-  updatePageInfo();
 }
 
-// Función para actualizar la paginación
-function updatePagination() {
-  const totalPages = Math.ceil(filteredData.length / itemsPerPage);
-  elements.paginationContainer.innerHTML = '';
-  
-  // Botón Anterior
-  const prevButton = document.createElement("button");
-  prevButton.innerHTML = "&laquo;";
-  prevButton.onclick = () => goToPage(currentPage - 1);
-  prevButton.disabled = currentPage === 1;
-  elements.paginationContainer.appendChild(prevButton);
-  
-  // Botones de páginas
-  const maxVisiblePages = 5;
-  let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
-  let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
-  
-  if (endPage - startPage + 1 < maxVisiblePages) {
-    startPage = Math.max(1, endPage - maxVisiblePages + 1);
-  }
-  
-  if (startPage > 1) {
-    const firstPageButton = document.createElement("button");
-    firstPageButton.textContent = "1";
-    firstPageButton.onclick = () => goToPage(1);
-    elements.paginationContainer.appendChild(firstPageButton);
+// Función para mostrar los datos en la tabla
+function mostrarDatosEnTabla(datos) {
+    const tbody = document.getElementById('tabla-recortes');
+    tbody.innerHTML = ''; // Limpiar tabla existente
     
-    if (startPage > 2) {
-      const ellipsis = document.createElement("span");
-      ellipsis.textContent = "...";
-      elements.paginationContainer.appendChild(ellipsis);
-    }
-  }
-  
-  for (let i = startPage; i <= endPage; i++) {
-    const pageButton = document.createElement("button");
-    pageButton.textContent = i;
-    pageButton.onclick = () => goToPage(i);
-    if (i === currentPage) {
-      pageButton.classList.add("active");
-    }
-    elements.paginationContainer.appendChild(pageButton);
-  }
-  
-  if (endPage < totalPages) {
-    if (endPage < totalPages - 1) {
-      const ellipsis = document.createElement("span");
-      ellipsis.textContent = "...";
-      elements.paginationContainer.appendChild(ellipsis);
+    // Verificar si los datos son válidos
+    if (!Array.isArray(datos)) {
+        console.error('Datos no válidos:', datos);
+        // Si datos es un objeto pero no un array, intentar ver si contiene un array
+        if (datos && typeof datos === 'object') {
+            // Buscar la primera propiedad que sea un array
+            for (const prop in datos) {
+                if (Array.isArray(datos[prop])) {
+                    console.log(`Encontrado array en la propiedad '${prop}'`);
+                    datos = datos[prop];
+                    break;
+                }
+            }
+        }
+        
+        // Si aún no es un array, intentar envolverlo
+        if (!Array.isArray(datos)) {
+            console.log('Intentando convertir a array');
+            datos = [datos];
+        }
     }
     
-    const lastPageButton = document.createElement("button");
-    lastPageButton.textContent = totalPages;
-    lastPageButton.onclick = () => goToPage(totalPages);
-    elements.paginationContainer.appendChild(lastPageButton);
-  }
-  
-  // Botón Siguiente
-  const nextButton = document.createElement("button");
-  nextButton.innerHTML = "&raquo;";
-  nextButton.onclick = () => goToPage(currentPage + 1);
-  nextButton.disabled = currentPage === totalPages;
-  elements.paginationContainer.appendChild(nextButton);
+    // Llenar la tabla con los datos
+    datos.forEach(item => {
+        const fila = document.createElement('tr');
+        
+        // Formatear fecha y hora
+        const fechaHora = `${item.fecha || ''} ${item.hora || ''}`.trim();
+        
+        // Crear celdas para cada campo
+        fila.innerHTML = `
+            <td>${item.autor || 'Sin autor'}</td>
+            <td>${item.nombre ? item.nombre.replace(/\uFEFF|\u200B/g, '') : 'Sin nombre'}</td>
+            <td class="contenido-celda">
+                <div class="contenido-preview">${item.contenido || 'Sin contenido'}</div>
+                ${item.pagina ? `<div class="pagina-info">Página ${item.pagina}</div>` : ''}
+            </td>
+            <td>${fechaHora || 'Sin fecha'}</td>
+            <td class="acciones">
+                <button class="btn-accion ver" data-id="${item.id || ''}">👁️</button>
+                <button class="btn-accion etiquetar" data-id="${item.id || ''}">🏷️</button>
+                ${item.visibilidad !== undefined ? 
+                    (item.visibilidad ? 
+                    '<span class="badge visible">Visible</span>' : 
+                    '<span class="badge oculto">Oculto</span>') :
+                    '<span class="badge">-</span>'}
+            </td>
+        `;
+        
+        tbody.appendChild(fila);
+    });
+    
+    // Agregar event listeners a los botones
+    document.querySelectorAll('.btn-accion.ver').forEach(btn => {
+        btn.addEventListener('click', () => verDetalleCompleto(btn.dataset.id));
+    });
+    
+    document.querySelectorAll('.btn-accion.etiquetar').forEach(btn => {
+        btn.addEventListener('click', () => gestionarEtiquetas(btn.dataset.id));
+    });
 }
 
-// Función para cambiar de página
-function goToPage(page) {
-  const totalPages = Math.ceil(filteredData.length / itemsPerPage);
-  if (page < 1 || page > totalPages) return;
-  
-  currentPage = page;
-  renderTable();
-  updatePagination();
+// Función para ver el detalle completo
+function verDetalleCompleto(id) {
+    console.log('Mostrar detalle completo del item:', id);
+    // Aquí puedes implementar un modal o expandir la fila
 }
 
-// Función para cambiar items por página
-function changeItemsPerPage() {
-  itemsPerPage = parseInt(elements.itemsPerPageSelect.value);
-  currentPage = 1;
-  updatePagination();
-  renderTable();
+// Función para gestionar etiquetas
+function gestionarEtiquetas(id) {
+    console.log('Gestionar etiquetas del item:', id);
+    // Aquí puedes implementar un selector de etiquetas
 }
 
-// Función para actualizar info de página
-function updatePageInfo() {
-  const startItem = (currentPage - 1) * itemsPerPage + 1;
-  const endItem = Math.min(currentPage * itemsPerPage, filteredData.length);
-  const totalItems = filteredData.length;
-  
-  elements.pageInfo.textContent = 
-    `Mostrando ${startItem} a ${endItem} de ${totalItems} registros`;
-}
-
-// Función para mostrar mensaje sin datos
-function showNoDataMessage(message) {
-  elements.tableBody.innerHTML = `<tr class="no-data"><td colspan="4">${message}</td></tr>`;
-  elements.paginationContainer.innerHTML = '';
-  elements.pageInfo.textContent = '';
-}
-
-// Inicialización
-document.addEventListener('DOMContentLoaded', () => {
-  setupEventListeners();
-  cargarTabla();
+// Inicialización cuando el DOM esté listo
+document.addEventListener('DOMContentLoaded', function() {
+    configurarSelectorArchivos();
+    
+    // Cargar lista de archivos (tu código existente)
+    fetch('/mostrar-archivos')
+        .then(response => response.json())
+        .then(archivos => {
+            const selector = document.getElementById('selector-archivos');
+            archivos.forEach(archivo => {
+                const option = document.createElement('option');
+                option.value = archivo;
+                option.textContent = archivo;
+                selector.appendChild(option);
+            });
+        })
+        .catch(error => console.error("Error al cargar archivos:", error));
 });

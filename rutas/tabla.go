@@ -2,32 +2,40 @@ package rutas
 
 import (
 	"encoding/json"
-	"log"
 	"net/http"
 	"os"
+	"path/filepath"
 	"recortesKindle/paquetes/analisis"
-	"recortesKindle/paquetes/modelos"
 	"text/template"
 
 	"github.com/gorilla/mux"
 )
 
 func Inicio(w http.ResponseWriter, r *http.Request) {
-	docs := []modelos.Documento{}
-	// Cargar y ejecutar la plantilla
+	// Verifica que la plantilla existe
 	t, err := template.ParseFiles("templates/index.html")
 	if err != nil {
-		log.Fatalf("Error al cargar plantilla: %v", err)
+		http.Error(w, "Error al cargar plantilla: "+err.Error(), http.StatusInternalServerError)
+		return
 	}
-	err = t.Execute(w, docs)
+
+	// Ejecuta la plantilla sin datos (o con los datos que necesites)
+	err = t.Execute(w, nil)
 	if err != nil {
-		http.Error(w, "Error al renderizar plantilla", http.StatusInternalServerError)
-		log.Printf("Error al ejecutar plantilla: %v", err)
+		http.Error(w, "Error al renderizar plantilla: "+err.Error(), http.StatusInternalServerError)
 	}
 }
 
+// Handler para cargar un archivo específico
 func DataHandler(w http.ResponseWriter, r *http.Request) {
-	file, err := os.Open("datos/salida/notas.json")
+	nombre := r.URL.Query().Get("archivo")
+	if nombre == "" {
+		http.Error(w, "Falta el parámetro 'archivo'", http.StatusBadRequest)
+		return
+	}
+
+	path := filepath.Join("datos/salida", nombre)
+	file, err := os.Open(path)
 	if err != nil {
 		http.Error(w, "No se pudo abrir el archivo JSON", http.StatusInternalServerError)
 		return
@@ -53,7 +61,7 @@ func Similitudes(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	jsonInfo, err := os.ReadFile("datos/salida/notas.json")
+	jsonInfo, err := os.ReadFile("datos/salida/recortes.json")
 	if err != nil {
 		http.Error(w, "error leyendo datos", http.StatusInternalServerError)
 		return
