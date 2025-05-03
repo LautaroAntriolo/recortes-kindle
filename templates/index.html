@@ -58,35 +58,35 @@
       <div class="control-group select-group">
         <select id="selector-archivos" class="form-select">
           <option value="">Seleccionar archivo...</option>
-      </select>
-      </div>
-      <!-- Paginación -->
-      <div class="control-group pagination-group">
-        <label for="items-per-page" class="pagination-label">Mostrar:</label>
-        <select id="items-per-page" class="form-select">
-          <option value="5">5</option>
-          <option value="10" selected>10</option>
-          <option value="15">15</option>
-          <option value="20">20</option>
-          <option value="30">30</option>
         </select>
-        <span class="pagination-text">registros</span>
       </div>
+    </div>
+    <!-- Paginación -->
+    <div id="paginacion" class="control-group pagination-group">
+      <label for="items-per-page" class="pagination-label">Mostrar:</label>
+      <select id="items-per-page" class="form-select">
+        <option value="5">5</option>
+        <option value="10" selected>10</option>
+        <option value="15">15</option>
+        <option value="20">20</option>
+        <option value="30">30</option>
+      </select>
+      <span class="pagination-text">registros</span>
     </div>
     <div class="table-container">
       <div id="no-data-message" style="color: red"></div>
       <table id="data-table" class="tabla-datos">
         <thead>
-            <tr>
-                <th>Autor</th>
-                <th>Nombre</th>
-                <th>Contenido</th>
-                <th>Fecha</th>
-                <th>Acciones</th>
-            </tr>
+          <tr>
+            <th>Autor</th>
+            <th>Nombre</th>
+            <th>Contenido</th>
+            <th>Fecha</th>
+            <th>Acciones</th>
+          </tr>
         </thead>
         <tbody id="tabla-recortes"></tbody>
-    </table>
+      </table>
     </div>
     <div class="page-info" id="page-info"></div>
     <div class="pagination" id="pagination"></div>

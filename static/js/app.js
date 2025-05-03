@@ -1,139 +1,73 @@
-// Función para configurar el selector de archivos
 function configurarSelectorArchivos() {
     const selector = document.getElementById('selector-archivos');
-    
-    selector.addEventListener('change', async function() {
+    const paginacion = document.getElementById('paginacion');
+
+    // Configurar visibilidad inicial
+    if (selector.value === "") {
+        paginacion.style.display = 'none'; // Ocultar paginación si no hay archivo seleccionado
+    } else {
+        paginacion.style.display = 'block'; // Mostrar paginación si hay archivo seleccionado
+    }
+
+    selector.addEventListener('change', async function () {
         const archivoSeleccionado = this.value;
+
+        // Actualizar visibilidad de paginación cada vez que cambia
+        if (archivoSeleccionado === "") {
+            paginacion.style.display = 'none';
+        } else {
+            paginacion.style.display = 'block';
+        }
+
+        const tbody = document.getElementById('tabla-recortes');
+        if (tbody) {
+            tbody.innerHTML = ''; // Limpiar tabla existente si existe
+        }
+
         if (!archivoSeleccionado) {
-            const tbody = document.getElementById('tabla-recortes');
-            tbody.innerHTML = ''; // Limpiar tabla existente
-        };
-        
+            console.log("No se seleccionó archivo.");
+            return;
+        }
+
         try {
-            // Enviar el nombre del archivo .txt (la API lo convertirá a .json)
             const response = await fetch(`/archivo/${encodeURIComponent(archivoSeleccionado)}`);
-            
+
             if (!response.ok) {
                 throw new Error(`Error ${response.status}: ${response.statusText}`);
             }
-            
-            // Primero obtener la respuesta como texto para poder inspeccionarla
+
             const textoRespuesta = await response.text();
-            
-            // Depuración - mostrar la respuesta completa para diagnóstico
             console.log("Respuesta completa del servidor:", textoRespuesta);
-            
-            // Intentar extraer solo la parte JSON de la respuesta
+
             let jsonLimpio;
-            
-            try {
-                // Método 1: Buscar el primer carácter válido de JSON (normalmente '{' o '[')
-                let inicioJSON = -1;
-                const posibleInicio1 = textoRespuesta.indexOf('{');
-                const posibleInicio2 = textoRespuesta.indexOf('[');
-                
-                if (posibleInicio1 >= 0 && (posibleInicio2 < 0 || posibleInicio1 < posibleInicio2)) {
-                    inicioJSON = posibleInicio1;
-                } else if (posibleInicio2 >= 0) {
-                    inicioJSON = posibleInicio2;
-                }
-                
-                if (inicioJSON > 0) {
-                    console.log(`Encontrado texto no JSON al inicio. Eliminando los primeros ${inicioJSON} caracteres.`);
-                    jsonLimpio = textoRespuesta.substring(inicioJSON);
+            let inicioJSON = Math.min(
+                textoRespuesta.indexOf('{') >= 0 ? textoRespuesta.indexOf('{') : Number.MAX_SAFE_INTEGER,
+                textoRespuesta.indexOf('[') >= 0 ? textoRespuesta.indexOf('[') : Number.MAX_SAFE_INTEGER
+            );
+
+            if (inicioJSON !== Number.MAX_SAFE_INTEGER) {
+                jsonLimpio = textoRespuesta.substring(inicioJSON);
+            } else {
+                // Intentar regex si no encuentra { o [
+                const regexJSON = /[\[\{].*[\]\}]/s;
+                const coincidencias = textoRespuesta.match(regexJSON);
+                if (coincidencias && coincidencias[0]) {
+                    jsonLimpio = coincidencias[0];
                 } else {
-                    jsonLimpio = textoRespuesta;
+                    throw new Error("No se encontró JSON en la respuesta.");
                 }
-                
-                // Método 2: Si el método 1 falla, intentar extraer usando expresiones regulares
-                if (jsonLimpio.indexOf('{') < 0 && jsonLimpio.indexOf('[') < 0) {
-                    const regexJSON = /[\[\{].*[\]\}]/s;
-                    const coincidencias = textoRespuesta.match(regexJSON);
-                    if (coincidencias && coincidencias[0]) {
-                        console.log("Extrayendo JSON usando regex");
-                        jsonLimpio = coincidencias[0];
-                    }
-                }
-                
-                // Método 3: Intentar eliminar el nombre del archivo del inicio
-                if (archivoSeleccionado && textoRespuesta.includes(archivoSeleccionado)) {
-                    const nombreSinExt = archivoSeleccionado.replace(/\.\w+$/, '');
-                    if (textoRespuesta.includes(nombreSinExt)) {
-                        console.log(`La respuesta contiene el nombre del archivo (${nombreSinExt}), intentando eliminarlo`);
-                        const despuesDelNombre = textoRespuesta.indexOf(nombreSinExt) + nombreSinExt.length;
-                        jsonLimpio = textoRespuesta.substring(despuesDelNombre);
-                        
-                        // Buscar nuevamente el inicio del JSON
-                        const nuevoInicio = Math.min(
-                            jsonLimpio.indexOf('{') >= 0 ? jsonLimpio.indexOf('{') : Number.MAX_SAFE_INTEGER,
-                            jsonLimpio.indexOf('[') >= 0 ? jsonLimpio.indexOf('[') : Number.MAX_SAFE_INTEGER
-                        );
-                        
-                        if (nuevoInicio < Number.MAX_SAFE_INTEGER) {
-                            jsonLimpio = jsonLimpio.substring(nuevoInicio);
-                        }
-                    }
-                }
-                
-                // Ahora intentar parsear el JSON limpio
-                console.log("Intentando parsear:", jsonLimpio.substring(0, 50) + "...");
-                const datos = JSON.parse(jsonLimpio);
-                
-                // Mostrar los datos en la tabla
-                mostrarDatosEnTabla(datos);
-                
-            } catch (parseError) {
-                console.error("Error al parsear JSON:", parseError);
-                
-                // Intento final: Si el archivo parece ser texto plano, crear un JSON manualmente
-                try {
-                    console.log("Intentando convertir texto plano a JSON");
-                    
-                    // Dividir por líneas y crear objetos
-                    const lineas = textoRespuesta.split('\n').filter(l => l.trim());
-                    
-                    if (lineas.length > 0) {
-                        // Verificar si la primera línea podría ser un encabezado
-                        const primeraLinea = lineas[0];
-                        const camposEncabezado = primeraLinea.split(/[\t,;|]/).map(c => c.trim());
-                        
-                        // Crear un array de objetos
-                        const datos = [];
-                        
-                        for (let i = 1; i < lineas.length; i++) {
-                            const valores = lineas[i].split(/[\t,;|]/);
-                            const obj = {};
-                            
-                            // Asignar valores usando encabezados o índices
-                            for (let j = 0; j < Math.max(camposEncabezado.length, valores.length); j++) {
-                                const clave = j < camposEncabezado.length ? camposEncabezado[j] : `campo${j+1}`;
-                                const valor = j < valores.length ? valores[j].trim() : '';
-                                obj[clave] = valor;
-                            }
-                            
-                            // Asegurar que tiene al menos un id
-                            if (!obj.id) obj.id = `item-${i}`;
-                            
-                            datos.push(obj);
-                        }
-                        
-                        mostrarDatosEnTabla(datos);
-                        return;
-                    }
-                } catch (finalError) {
-                    console.error("Todos los intentos de parseo fallaron:", finalError);
-                    throw new Error("No se pudo procesar el contenido del archivo");
-                }
-                
-                throw parseError;
             }
-            
+
+            const datos = JSON.parse(jsonLimpio);
+            mostrarDatosEnTabla(datos);
+
         } catch (error) {
-            console.error('Error al cargar el archivo:', error);
-            // alert('Error al cargar el archivo: ' + error.message);
+            console.error('Error al procesar el archivo:', error);
+            alert('Error al procesar el archivo: ' + error.message);
         }
     });
 }
+
 
 // Función para mostrar los datos en la tabla
 function mostrarDatosEnTabla(datos) {
