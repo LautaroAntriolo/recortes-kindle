@@ -79,6 +79,7 @@ function mostrarDatosEnTabla(datos) {
         console.error('Datos no válidos:', datos);
         // Si datos es un objeto pero no un array, intentar ver si contiene un array
         if (datos && typeof datos === 'object') {
+            // console.log(datos)
             // Buscar la primera propiedad que sea un array
             for (const prop in datos) {
                 if (Array.isArray(datos[prop])) {
@@ -113,8 +114,10 @@ function mostrarDatosEnTabla(datos) {
             </td>
             <td>${fechaHora || 'Sin fecha'}</td>
             <td class="acciones">
-                <button class="btn-accion ver" data-id="${item.id || ''}">👁️</button>
-                <button class="btn-accion etiquetar" data-id="${item.id || ''}">🏷️</button>
+                <button class="btn-accion ver" data-id="${item.id || ''}"><a href="#">👁️</a></button>
+                <button class="btn-accion etiquetar" data-id="${item.id || ''}"><a href="#">🏷️</a></button>
+                <button class="btn-accion editar" data-id="${item.id || ''}"><a href="#">😍</a></button>
+                <button class="btn-accion eliminar" data-id="${item.id || ''}"><a href="#">😎</a></button>
                 ${item.visibilidad !== undefined ? 
                     (item.visibilidad ? 
                     '<span class="badge visible">Visible</span>' : 
@@ -134,6 +137,14 @@ function mostrarDatosEnTabla(datos) {
     document.querySelectorAll('.btn-accion.etiquetar').forEach(btn => {
         btn.addEventListener('click', () => gestionarEtiquetas(btn.dataset.id));
     });
+    
+    document.querySelectorAll('.btn-accion.editar').forEach(btn => {
+        btn.addEventListener('click', () => editarElemento(btn.dataset.id));
+    });
+
+    document.querySelectorAll('.btn-accion.eliminar').forEach(btn => {
+        btn.addEventListener('click', () => eliminarElemento(btn.dataset.id));
+    });
 }
 
 // Función para ver el detalle completo
@@ -145,6 +156,18 @@ function verDetalleCompleto(id) {
 // Función para gestionar etiquetas
 function gestionarEtiquetas(id) {
     console.log('Gestionar etiquetas del item:', id);
+    // Aquí puedes implementar un selector de etiquetas
+}
+
+// Función para editar el recorte
+function editarElemento(id) {
+    console.log('Editar recorte del item:', id);
+    // Aquí puedes implementar un selector de etiquetas
+}
+
+// Función para eliminar el recorte
+function eliminarElemento(id) {
+    console.log('Eliminar recorte del item:', id);
     // Aquí puedes implementar un selector de etiquetas
 }
 

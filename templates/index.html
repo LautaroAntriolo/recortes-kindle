@@ -62,16 +62,20 @@
       </div>
     </div>
     <!-- Paginación -->
-    <div id="paginacion" class="control-group pagination-group">
+    <div
+      id="paginacion"
+      class="control-group controls-container pagination-group"
+    >
       <label for="items-per-page" class="pagination-label">Mostrar:</label>
       <select id="items-per-page" class="form-select">
         <option value="5">5</option>
         <option value="10" selected>10</option>
-        <option value="15">15</option>
         <option value="20">20</option>
-        <option value="30">30</option>
+        <option value="50">50</option>
+        <option value="100">100</option>
+        <option value="0">Todos</option>
       </select>
-      <span class="pagination-text">registros</span>
+      <span class="pagination-text">registros por página</span>
     </div>
     <div class="table-container">
       <div id="no-data-message" style="color: red"></div>
@@ -87,6 +91,15 @@
         </thead>
         <tbody id="tabla-recortes"></tbody>
       </table>
+      <div class="pagination-controls">
+        <button id="prev-page" class="btn btn-pagination" disabled>
+          <i class="fas fa-chevron-left"></i> Anterior
+        </button>
+        <span id="page-indicator">Página 1</span>
+        <button id="next-page" class="btn btn-pagination">
+          Siguiente <i class="fas fa-chevron-right"></i>
+        </button>
+      </div>
     </div>
     <div class="page-info" id="page-info"></div>
     <div class="pagination" id="pagination"></div>
