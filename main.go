@@ -27,7 +27,7 @@ func main() {
 	r.HandleFunc("/cargar-archivo", rutas.CargarArchivoHandler).Methods("POST")
 
 	//No chequedas
-	r.HandleFunc("/similitudes/{palabra}", rutas.Similitudes).Methods("GET")
+	r.HandleFunc("/similitudes/{palabra}", rutas.Similitudes)
 	r.HandleFunc("/archivo/{nombre}", rutas.ObtenerArchivoHandler).Methods("GET")
 	
 

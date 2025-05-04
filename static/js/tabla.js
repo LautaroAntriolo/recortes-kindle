@@ -25,7 +25,7 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // Mostrar mensaje si hay más de 100 registros disponibles
         if (noDataMessage && allRows.length >= 100) {
-            noDataMessage.textContent = `Mostrando máximo 100 registros (de un total mayor)`;
+            console.log(`Mostrando máximo 100 registros (de un total mayor)`)
         } else if (noDataMessage) {
             noDataMessage.textContent = '';
         }
@@ -46,7 +46,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
 
         updatePaginationControls(itemsPerPage);
-        updatePageInfo(itemsPerPage);
+        // updatePageInfo(itemsPerPage);
     }
 
     function updatePaginationControls(itemsPerPage) {
@@ -61,27 +61,6 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    function updatePageInfo(itemsPerPage) {
-        if (!pageIndicator && !pageInfo) return;
-        
-        if (itemsPerPage === 0) {
-            if (pageIndicator) {
-                pageIndicator.textContent = `Mostrando ${allRows.length} registros`;
-            }
-            if (pageInfo) {
-                pageInfo.textContent = `Mostrando ${allRows.length} registros`;
-            }
-        } else {
-            const startItem = ((currentPage - 1) * itemsPerPage) + 1;
-            const endItem = Math.min(currentPage * itemsPerPage, allRows.length);
-            if (pageIndicator) {
-                pageIndicator.textContent = `Página ${currentPage} de ${totalPages} (${startItem}-${endItem} de ${allRows.length})`;
-            }
-            if (pageInfo) {
-                pageInfo.textContent = `Mostrando ${endItem - startItem + 1} de ${allRows.length} registros`;
-            }
-        }
-    }
 
     function handleItemsPerPageChange(e) {
         const valor = e.target.value;
