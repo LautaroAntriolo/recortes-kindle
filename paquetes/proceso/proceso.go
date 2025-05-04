@@ -64,7 +64,10 @@ func ProcesoDeLineas(lines []string) ([]Recorte, error) {
 				authorPart := parts[len(parts)-1]
 				author := strings.TrimSuffix(authorPart, ")")
 
-				currentRecorte.Nombre = bookName
+				// Limpiar el nombre del libro
+				cleanBookName := processBookName(bookName, author)
+
+				currentRecorte.Nombre = cleanBookName
 				currentRecorte.Autor = strings.TrimSpace(author)
 			}
 			continue
@@ -123,6 +126,22 @@ func ProcesoDeLineas(lines []string) ([]Recorte, error) {
 	}
 
 	return recortes, nil
+}
+
+// Función auxiliar para procesar el nombre del libro
+func processBookName(bookName, author string) string {
+	// Reemplazar guiones bajos por espacios
+	cleanName := strings.ReplaceAll(bookName, "_", " ")
+
+	// Eliminar el nombre del autor si aparece en el título
+	authorParts := strings.Fields(author)
+	for _, part := range authorParts {
+		cleanName = strings.ReplaceAll(cleanName, part, "")
+	}
+
+	// Limpiar espacios extras y normalizar
+	cleanName = strings.Join(strings.Fields(cleanName), " ") // Esto elimina múltiples espacios
+	return strings.TrimSpace(cleanName)
 }
 
 // Función auxiliar para convertir fechas del formato español al formato ISO YYYY-MM-DD

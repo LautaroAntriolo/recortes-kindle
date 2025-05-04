@@ -7,6 +7,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const prevButton = document.getElementById('prev-page');
     const nextButton = document.getElementById('next-page');
     const pageIndicator = document.getElementById('page-indicator');
+    const noDataMessage = document.getElementById('no-data-message');
 
     // Verificar que los elementos esenciales existen
     if (!selectSuperior || !tbody) {
@@ -22,10 +23,19 @@ document.addEventListener('DOMContentLoaded', function() {
         const itemsPerPage = parseInt(selectSuperior.value) || 0;
         allRows = Array.from(tbody.querySelectorAll('tr'));
         
+        // Mostrar mensaje si hay más de 100 registros disponibles
+        if (noDataMessage && allRows.length >= 100) {
+            noDataMessage.textContent = `Mostrando máximo 100 registros (de un total mayor)`;
+        } else if (noDataMessage) {
+            noDataMessage.textContent = '';
+        }
+
         if (itemsPerPage === 0) {
+            // Mostrar todos los registros (hasta 100)
             totalPages = 1;
             allRows.forEach(row => row.style.display = '');
         } else {
+            // Paginar los registros visibles (hasta 100)
             totalPages = Math.max(1, Math.ceil(allRows.length / itemsPerPage));
             const startIndex = (currentPage - 1) * itemsPerPage;
             const endIndex = startIndex + itemsPerPage;
@@ -55,8 +65,12 @@ document.addEventListener('DOMContentLoaded', function() {
         if (!pageIndicator && !pageInfo) return;
         
         if (itemsPerPage === 0) {
-            if (pageIndicator) pageIndicator.textContent = `Mostrando todos los registros (${allRows.length})`;
-            if (pageInfo) pageInfo.textContent = `Mostrando todos los ${allRows.length} registros`;
+            if (pageIndicator) {
+                pageIndicator.textContent = `Mostrando ${allRows.length} registros`;
+            }
+            if (pageInfo) {
+                pageInfo.textContent = `Mostrando ${allRows.length} registros`;
+            }
         } else {
             const startItem = ((currentPage - 1) * itemsPerPage) + 1;
             const endItem = Math.min(currentPage * itemsPerPage, allRows.length);
