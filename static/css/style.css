@@ -5,12 +5,14 @@
   --text: #222;
   --border: #e0e0e0;
   --radius: 12px;
-  --shadow: 0 2px 8px rgba(0,0,0,0.06);
+  --shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
 }
-* { box-sizing: border-box; }
+* {
+  box-sizing: border-box;
+}
 body {
   margin: 0;
-  font-family: 'Segoe UI', 'Roboto', Arial, sans-serif;
+  font-family: "Segoe UI", "Roboto", Arial, sans-serif;
   background: var(--secondary);
   color: var(--text);
   min-height: 100vh;
@@ -51,7 +53,6 @@ h1 {
   min-width: 220px;
 }
 
-
 .file-upload-wrapper {
   display: flex;
   gap: 0.5rem;
@@ -72,11 +73,17 @@ h1 {
   gap: 0.5rem;
   transition: background 0.2s;
 }
-.file-upload-button:hover { background: var(--primary); color: #fff; }
+.file-upload-button:hover {
+  background: var(--primary);
+  color: #fff;
+}
 .file-input {
   opacity: 0;
   position: absolute;
-  left: 0; top: 0; width: 100%; height: 100%;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
   cursor: pointer;
 }
 .btn {
@@ -90,13 +97,30 @@ h1 {
   align-items: center;
   gap: 0.5rem;
 }
-.btn-primary { background: var(--primary); color: #fff; }
-.btn-primary:hover { background: #1761ac; }
-.btn-success { background: #5cb85c; color: #fff; }
-.btn-success:hover { background: #449d44; }
-.btn-secondary { background: var(--accent); color: var(--primary); }
-.btn-secondary:hover { background: var(--primary); color: #fff; }
-.form-input, .form-select {
+.btn-primary {
+  background: var(--primary);
+  color: #fff;
+}
+.btn-primary:hover {
+  background: #1761ac;
+}
+.btn-success {
+  background: #5cb85c;
+  color: #fff;
+}
+.btn-success:hover {
+  background: #449d44;
+}
+.btn-secondary {
+  background: var(--accent);
+  color: var(--primary);
+}
+.btn-secondary:hover {
+  background: var(--primary);
+  color: #fff;
+}
+.form-input,
+.form-select {
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 0.5rem 0.8rem;
@@ -105,7 +129,10 @@ h1 {
   outline: none;
   transition: border-color 0.2s;
 }
-.form-input:focus, .form-select:focus { border-color: var(--primary); }
+.form-input:focus,
+.form-select:focus {
+  border-color: var(--primary);
+}
 .table-container {
   max-width: 950px;
   margin: 0 auto 2rem auto;
@@ -119,7 +146,8 @@ table {
   border-collapse: collapse;
   min-width: 600px;
 }
-th, td {
+th,
+td {
   padding: 0.9rem 0.7rem;
   text-align: left;
   border-bottom: 1px solid var(--border);
@@ -129,7 +157,9 @@ th {
   font-weight: 500;
   letter-spacing: 0.5px;
 }
-tr:last-child td { border-bottom: none; }
+tr:last-child td {
+  border-bottom: none;
+}
 .no-data td {
   text-align: center;
   color: #888;
@@ -165,16 +195,84 @@ tr:last-child td { border-bottom: none; }
   background: var(--primary);
   color: #fff;
 }
+
+/* Agrega esto a tu archivo style.css */
+.contenido-wrapper {
+  position: relative;
+  min-height: 30px;
+}
+
+.btn-ver-mas {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  background: rgba(255, 255, 255, 0.8);
+  padding: 0 5px;
+  font-size: 0.8rem;
+  border: none;
+  color: #0066cc;
+  cursor: pointer;
+}
+
+.btn-ver-mas:hover {
+  text-decoration: underline;
+}
+
+/* Estilos para el modal */
+.modal-contenido {
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 60vh;
+  overflow-y: auto;
+}
+/* Agrega estas transiciones */
+.modal {
+    animation: fadeIn 0.3s ease-out;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.contenido-corto {
+    transition: all 0.3s ease;
+}
+
+.btn-ver-mas {
+    transition: opacity 0.2s ease;
+}
 /* Responsive */
 @media (max-width: 900px) {
-  .table-container { min-width: 0; }
-  table { min-width: 0; font-size: 0.98rem; }
-  .controls-container { flex-direction: column; align-items: stretch; }
-  .control-group { width: 100%; justify-content: flex-start; }
+  .table-container {
+    min-width: 0;
+  }
+  table {
+    min-width: 0;
+    font-size: 0.98rem;
+  }
+  .controls-container {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .control-group {
+    width: 100%;
+    justify-content: flex-start;
+  }
 }
 @media (max-width: 600px) {
-  h1 { font-size: 1.5rem; }
-  .table-container { box-shadow: none; border-radius: 0; }
-  .control-group { padding: 0.7rem 0.5rem; }
-  th, td { padding: 0.7rem 0.4rem; }
+  h1 {
+    font-size: 1.5rem;
+  }
+  .table-container {
+    box-shadow: none;
+    border-radius: 0;
+  }
+  .control-group {
+    padding: 0.7rem 0.5rem;
+  }
+  th,
+  td {
+    padding: 0.7rem 0.4rem;
+  }
 }

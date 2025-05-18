@@ -8,6 +8,11 @@
       rel="stylesheet"
       href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css"
     />
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"
+    />
+
     <link rel="stylesheet" href="static/css/style.css" />
   </head>
   <body>
@@ -58,6 +63,7 @@
       <div class="control-group select-group">
         <select id="selector-archivos" class="form-select">
           <option value="">Seleccionar archivo...</option>
+          <!-- Opciones se llenarán con JavaScript -->
         </select>
       </div>
     </div>
@@ -77,36 +83,208 @@
           <option value="0">Todos</option>
         </select>
         <span class="pagination-text">registros por página</span>
-        <span class="pagination-text"><button type="submit" href="">ver ocultos</button></span>
-        <span class="pagination-text"><button type="submit" href="">ocultar marcados</button></span>
+        <span class="pagination-text"
+          ><button type="submit" href="">ver ocultos</button></span
+        >
+        <span class="pagination-text"
+          ><button type="submit" href="">ocultar marcados</button></span
+        >
       </div>
     </div>
     <div class="table-container">
-      <div id="no-data-message" style="color: red"></div>
-      <table id="data-table" class="tabla-datos">
-        <thead>
-          <tr>
-            <th>Autor</th>
-            <th>Nombre</th>
-            <th>Contenido</th>
-            <th>Fecha</th>
-            <th>Acciones</th>
-          </tr>
-        </thead>
-        <tbody id="tabla-recortes"></tbody>
-      </table>
-      <div class="pagination-controls">
-        <button id="prev-page" class="btn btn-pagination" disabled>
-          <i class="fas fa-chevron-left"></i> Anterior
-        </button>
-        <button id="next-page" class="btn btn-pagination">
-          Siguiente <i class="fas fa-chevron-right"></i>
-        </button>
+      <div id="tabla-datos" class="mt-4">
+        <!-- Tabla se generará dinámicamente -->
       </div>
     </div>
     <div class="page-info" id="page-info"></div>
     <div class="pagination" id="pagination"></div>
-    <script src="/static/js/app.js"></script>
-    <script src="/static/js/tabla.js"></script>
+    <script>
+      document.addEventListener("DOMContentLoaded", function () {
+        const selector = document.getElementById("selector-archivos");
+        const tablaContenedor = document.getElementById("tabla-datos");
+
+        // 1. Cargar lista de archivos
+        fetch("/api/bases-de-datos")
+          .then((response) => response.json())
+          .then((archivos) => {
+            archivos.forEach((archivo) => {
+              const option = document.createElement("option");
+              option.value = archivo;
+              option.textContent = archivo;
+              selector.appendChild(option);
+            });
+          });
+
+        // 2. Manejar selección de archivo
+        selector.addEventListener("change", function () {
+          if (!this.value) {
+            tablaContenedor.innerHTML = "";
+            return;
+          }
+
+          fetch(`/api/datos?archivo=${encodeURIComponent(this.value)}`)
+            .then((response) => response.json())
+            .then((datos) => {
+              renderizarTabla(datos);
+            });
+        });
+
+        function renderizarTabla(recortes) {
+          if (recortes.length === 0) {
+            tablaContenedor.innerHTML = "<p>No hay datos disponibles</p>";
+            return;
+          }
+
+          // Crear tabla
+          const tabla = document.createElement("table");
+          tabla.className = "table table-striped";
+
+          // Cabecera
+          const thead = document.createElement("thead");
+          const headerRow = document.createElement("tr");
+          [
+            "ID",
+            "Autor",
+            "Nombre",
+            "Contenido",
+            "Página",
+            "Etiquetas",
+            "Acciones",
+          ].forEach((texto) => {
+            const th = document.createElement("th");
+            th.textContent = texto;
+            headerRow.appendChild(th);
+          });
+          thead.appendChild(headerRow);
+          tabla.appendChild(thead);
+
+          // Cuerpo
+          const tbody = document.createElement("tbody");
+          recortes.forEach((recorte) => {
+            const tr = document.createElement("tr");
+
+            // ID
+            const tdId = document.createElement("td");
+            tdId.textContent = recorte.id;
+            tr.appendChild(tdId);
+
+            // Autor
+            const tdAutor = document.createElement("td");
+            tdAutor.textContent = recorte.autor || "-";
+            tr.appendChild(tdAutor);
+
+            // Nombre
+            const tdNombre = document.createElement("td");
+            tdNombre.textContent = recorte.nombre || "-";
+            tr.appendChild(tdNombre);
+
+            // Contenido (acortado)
+            // Reemplaza el código actual de tdContenido con este:
+            const tdContenido = document.createElement("td");
+            const contenidoWrapper = document.createElement("div");
+            contenidoWrapper.className = "contenido-wrapper";
+
+            const contenidoCorto = document.createElement("span");
+            contenidoCorto.className = "contenido-corto";
+            const fullText = recorte.contenido || "-";
+            const palabras = fullText.split(/\s+/);
+            const limitePalabras = 30;
+
+            const textoMostrado =
+              palabras.length > limitePalabras
+                ? palabras.slice(0, limitePalabras).join(" ") + "..."
+                : fullText;
+
+            contenidoCorto.textContent = textoMostrado;
+            contenidoCorto.dataset.full = fullText;
+            console.log(`ID ${recorte.id} tiene ${palabras.length} palabras`);
+
+            contenidoWrapper.appendChild(contenidoCorto);
+
+
+            contenidoWrapper.appendChild(contenidoCorto);
+            tdContenido.appendChild(contenidoWrapper);
+            tr.appendChild(tdContenido);
+
+            // Página
+            const tdPagina = document.createElement("td");
+            tdPagina.textContent = recorte.pagina || "-";
+            tr.appendChild(tdPagina);
+
+            // Etiquetas
+            const tdEtiquetas = document.createElement("td");
+            tdEtiquetas.textContent = recorte.etiquetas
+              ? recorte.etiquetas.map((e) => e.nombre).join(", ")
+              : "-";
+            tr.appendChild(tdEtiquetas);
+
+            const tdAcciones = document.createElement("td");
+
+            // Creamos el contenedor del menú (un <div>)
+            const menu = document.createElement("div");
+            menu.classList.add("menu-acciones");
+
+            // Creamos los botones de acción con íconos
+            menu.innerHTML = `
+  <button title="Ver completo"><i class="fas fa-eye"></i></button>
+  <button title="Editar"><i class="fas fa-edit"></i></button>
+  <button title="Marcar como favorito"><i class="fas fa-star"></i></button>
+  <button title="Eliminar"><i class="fas fa-trash-alt"></i></button>
+`;
+
+            tdAcciones.appendChild(menu);
+            tr.appendChild(tdAcciones);
+            tbody.appendChild(tr);
+          });
+
+          tabla.appendChild(tbody);
+          tablaContenedor.innerHTML = "";
+          tablaContenedor.appendChild(tabla);
+        }
+      });
+      // Reemplaza el evento click existente con este:
+      document.addEventListener("click", function (e) {
+        // Verifica si se hizo click en el botón o en el ícono dentro del botón
+        const btnVerMas = e.target.closest(".btn-ver-mas");
+        if (btnVerMas) {
+          const contenidoWrapper = btnVerMas.parentElement;
+          const contenidoCorto =
+            contenidoWrapper.querySelector(".contenido-corto");
+          const contenidoCompleto = contenidoCorto.dataset.full;
+
+          // Crear modal simple si no estás usando Bootstrap
+          const modal = document.createElement("div");
+          modal.style.position = "fixed";
+          modal.style.top = "0";
+          modal.style.left = "0";
+          modal.style.width = "100%";
+          modal.style.height = "100%";
+          modal.style.backgroundColor = "rgba(0,0,0,0.7)";
+          modal.style.display = "flex";
+          modal.style.justifyContent = "center";
+          modal.style.alignItems = "center";
+          modal.style.zIndex = "1000";
+
+          modal.innerHTML = `
+            <div style="background: white; padding: 20px; border-radius: 5px; width: 80%; max-width: 800px; max-height: 80vh; display: flex; flex-direction: column;">
+                <div style="display: flex; justify-content: space-between; margin-bottom: 15px;">
+                    <h3>Contenido completo</h3>
+                    <button class="btn-cerrar-modal" style="background: none; border: none; font-size: 1.5rem; cursor: pointer;">×</button>
+                </div>
+                <div class="modal-contenido" style="flex-grow: 1; overflow-y: auto;">${contenidoCompleto}</div>
+            </div>
+        `;
+
+          document.body.appendChild(modal);
+
+          // Cerrar modal
+          modal
+            .querySelector(".btn-cerrar-modal")
+            .addEventListener("click", () => {
+              document.body.removeChild(modal);
+            });
+        }
+      });
+    </script>
   </body>
 </html>

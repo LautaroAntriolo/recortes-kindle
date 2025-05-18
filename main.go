@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"recortesKindle/paquetes/crudf"
 	"recortesKindle/rutas"
 
 	"github.com/gorilla/mux"
@@ -22,15 +21,10 @@ func main() {
 	r.PathPrefix("/static/").Handler(http.StripPrefix("/static/", http.FileServer(http.Dir("static"))))
 
 	//chequedas
-	r.HandleFunc("/", rutas.Inicio).Methods("GET")
-	r.HandleFunc("/data", rutas.DataHandler).Methods("GET")
-	r.HandleFunc("/mostrar-archivos", rutas.MostrarArchivos).Methods("GET")
+	r.HandleFunc("/", rutas.Inicio)
 	r.HandleFunc("/cargar-archivo", rutas.CargarArchivoHandler).Methods("POST")
-
-	//No chequedas
-	r.HandleFunc("/similitudes/{palabra}", rutas.Similitudes)
-	r.HandleFunc("/archivo/{nombre}", rutas.ObtenerArchivoHandler).Methods("GET")
-	r.HandleFunc("/archivo/{nombre}/{id}/favorito", crudf.Favoritos).Methods("GET", "POST", "PUT")
+	r.HandleFunc("/api/bases-de-datos", rutas.ListarBasesDeDatosHandler).Methods("GET")
+	r.HandleFunc("/api/datos", rutas.ObtenerDatosHandler).Methods("GET")
 
 	fmt.Println("🚀 Servidor iniciado en http://localhost:8080")
 	if err := http.ListenAndServe(":8080", r); err != nil {

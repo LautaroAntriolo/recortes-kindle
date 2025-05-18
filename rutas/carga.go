@@ -1,6 +1,7 @@
 package rutas
 
 import (
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -8,15 +9,15 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"strings"
-	"time"
-	"unicode"
-
-	"recortesKindle/paquetes/escritura"
 	"recortesKindle/paquetes/lectura"
+	"recortesKindle/paquetes/modelos"
 	"recortesKindle/paquetes/proceso"
+	"strconv"
+	"strings"
+	"text/template"
 
 	"github.com/gorilla/mux"
+	_ "github.com/mattn/go-sqlite3"
 )
 
 const (
@@ -24,30 +25,31 @@ const (
 	outputDir = "./datos/salida"
 )
 
-func init() {
-	if _, err := os.Stat(uploadDir); os.IsNotExist(err) {
-		os.MkdirAll(uploadDir, 0755)
-		os.MkdirAll(outputDir, 0755)
-	}
-}
+// Eliminamos la variable global db, cada handler manejará su propia conexión
 
 func CargarArchivoHandler(w http.ResponseWriter, r *http.Request) {
+	// 1. Procesar archivo subido
 	r.ParseMultipartForm(10 << 20)
-
 	file, handler, err := r.FormFile("archivo")
-	nombreSinExtension := strings.TrimSuffix(handler.Filename, filepath.Ext(handler.Filename))
 	if err != nil {
 		http.Error(w, "Error al obtener el archivo: "+err.Error(), http.StatusBadRequest)
 		return
 	}
 	defer file.Close()
 
+	// Validar extensión
 	if filepath.Ext(handler.Filename) != ".txt" {
 		http.Error(w, "Solo se permiten archivos .txt", http.StatusBadRequest)
 		return
 	}
 
+	// 2. Guardar archivo temporal
 	filePath := filepath.Join(uploadDir, handler.Filename)
+	if err := os.MkdirAll(uploadDir, 0755); err != nil {
+		http.Error(w, "Error al crear directorio: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
 	dst, err := os.Create(filePath)
 	if err != nil {
 		http.Error(w, "Error al guardar el archivo: "+err.Error(), http.StatusInternalServerError)
@@ -56,254 +58,388 @@ func CargarArchivoHandler(w http.ResponseWriter, r *http.Request) {
 	defer dst.Close()
 
 	if _, err := io.Copy(dst, file); err != nil {
-		http.Error(w, "Error al guardar el contenido: "+err.Error(), http.StatusInternalServerError)
+		http.Error(w, "Error al copiar archivo: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
+	// 3. Procesar líneas
 	lines, err := lectura.LeerArchivo(filePath)
-	if err != nil {
-		http.Error(w, "Error al leer el archivo: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	recortes, err := proceso.ProcesoDeLineas(lines)
-	if err != nil {
-		http.Error(w, "Error al procesar los recortes: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	outputPath := filepath.Join(outputDir, nombreSinExtension+".json")
-	jsonData, err := escritura.EscribirJSON(outputPath, recortes)
-	if err != nil {
-		http.Error(w, "Error al generar JSON: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	log.Printf("JSON generado (%d bytes)", len(jsonData))
-	w.Header().Set("Content-Type", "application/json")
-	http.Redirect(w, r, "/", http.StatusSeeOther)
-}
-
-func MostrarArchivos(w http.ResponseWriter, r *http.Request) {
-	dir := "datos/entrada"
-
-	files, err := os.ReadDir(dir)
-	if err != nil {
-		http.Error(w, "No se pudo leer el directorio: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	var nombres []string
-	for _, file := range files {
-		if !file.IsDir() {
-			nombres = append(nombres, file.Name())
-		}
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(nombres); err != nil {
-		http.Error(w, "Error al codificar respuesta JSON: "+err.Error(), http.StatusInternalServerError)
-	}
-}
-
-func ObtenerDatosHandler(w http.ResponseWriter, r *http.Request) {
-	outputPath := filepath.Join(outputDir)
-
-	if _, err := os.Stat(outputPath); os.IsNotExist(err) {
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode([]interface{}{})
-		return
-	}
-
-	data, err := os.ReadFile(outputPath)
-	if err != nil {
-		http.Error(w, "Error al leer el archivo JSON: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	w.Write(data)
-}
-
-func ObtenerArchivoHandler(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-	nombreArchivo := vars["nombre"]
-
-	// Convertir nombre.txt a nombre.json
-	nombreJSON := strings.TrimSuffix(nombreArchivo, filepath.Ext(nombreArchivo)) + ".json"
-	rutaArchivo := filepath.Join("datos", "salida", nombreJSON)
-
-	// Verificar si el archivo existe
-	if _, err := os.Stat(rutaArchivo); os.IsNotExist(err) {
-		// Si no existe el .json, buscar .txt como alternativa
-		rutaTXT := filepath.Join("datos", "salida", strings.TrimSuffix(nombreArchivo, filepath.Ext(nombreArchivo))+".txt")
-		if _, err := os.Stat(rutaTXT); os.IsNotExist(err) {
-			http.Error(w, "Archivo no encontrado", http.StatusNotFound)
-			return
-		}
-
-		// Leer el archivo de texto
-		contenidoTXT, err := os.ReadFile(rutaTXT)
-		if err != nil {
-			http.Error(w, "Error al leer archivo: "+err.Error(), http.StatusInternalServerError)
-			return
-		}
-
-		// Convertir el texto plano a formato JSON
-		lineas := strings.Split(string(contenidoTXT), "\n")
-		recortes := []map[string]string{}
-
-		// Procesar cada línea o bloque de texto
-		var recorteActual map[string]string
-		for _, linea := range lineas {
-			linea = strings.TrimSpace(linea)
-			if linea == "" {
-				continue
-			}
-
-			// Si la línea parece un título nuevo, crear un nuevo recorte
-			if strings.Contains(linea, "(") || strings.HasPrefix(linea, "Big_data") {
-				if recorteActual != nil && len(recorteActual) > 0 {
-					recortes = append(recortes, recorteActual)
-				}
-				recorteActual = map[string]string{
-					"id":        fmt.Sprintf("recorte-%d", len(recortes)+1),
-					"nombre":    linea,
-					"contenido": "",
-					"autor":     extraerAutor(linea),
-				}
-			} else if recorteActual != nil {
-				// Procesar información como página, posición, etc.
-				if strings.Contains(linea, "página") {
-					recorteActual["pagina"] = extraerNumero(linea, "página")
-				}
-				if strings.Contains(linea, "posición") {
-					recorteActual["posicion"] = extraerNumero(linea, "posición")
-				}
-
-				// Agregar al contenido si no es metadata
-				if !strings.HasPrefix(linea, "-") && !strings.HasPrefix(linea, "página") && !strings.HasPrefix(linea, "posición") {
-					if recorteActual["contenido"] != "" {
-						recorteActual["contenido"] += " "
-					}
-					recorteActual["contenido"] += linea
-				}
-			}
-		}
-
-		// Agregar el último recorte si existe
-		if recorteActual != nil && len(recorteActual) > 0 {
-			recortes = append(recortes, recorteActual)
-		}
-
-		// Si no se pudo extraer nada, crear un elemento simple
-		if len(recortes) == 0 {
-			recortes = append(recortes, map[string]string{
-				"id":        "recorte-1",
-				"nombre":    nombreArchivo,
-				"contenido": string(contenidoTXT),
-				"fecha":     time.Now().Format("2006-01-02"),
-			})
-		}
-
-		// Convertir a JSON
-		jsonData, err := json.Marshal(recortes)
-		if err != nil {
-			http.Error(w, "Error al convertir a JSON: "+err.Error(), http.StatusInternalServerError)
-			return
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-		w.Write(jsonData)
-		return
-	}
-
-	// Si llegamos aquí, el archivo JSON existe, intentar leerlo
-	contenido, err := os.ReadFile(rutaArchivo)
 	if err != nil {
 		http.Error(w, "Error al leer archivo: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	// Verificar si es JSON válido
-	var js json.RawMessage
-	if err := json.Unmarshal(contenido, &js); err != nil {
-		// Si no es JSON válido pero existe el archivo, intentar arreglarlo
-		contenidoStr := string(contenido)
-
-		// Buscar dónde comienza el JSON real (si hay un prefijo de texto)
-		inicioJSON := strings.IndexAny(contenidoStr, "{[")
-		if inicioJSON > 0 {
-			contenidoStr = contenidoStr[inicioJSON:]
-
-			// Verificar si el JSON recortado es válido
-			if err := json.Unmarshal([]byte(contenidoStr), &js); err != nil {
-				// Si sigue sin ser válido, convertirlo a un formato JSON simple
-				recortes := []map[string]string{
-					{
-						"id":        "recorte-1",
-						"nombre":    nombreArchivo,
-						"contenido": contenidoStr,
-						"fecha":     time.Now().Format("2006-01-02"),
-					},
-				}
-
-				jsonData, err := json.Marshal(recortes)
-				if err != nil {
-					http.Error(w, "Error al convertir a JSON: "+err.Error(), http.StatusInternalServerError)
-					return
-				}
-
-				w.Header().Set("Content-Type", "application/json")
-				w.Write(jsonData)
-				return
-			}
-
-			// Si es válido después de recortar, enviarlo
-			w.Header().Set("Content-Type", "application/json")
-			w.Write([]byte(contenidoStr))
-			return
-		}
-
-		http.Error(w, "El archivo no contiene JSON válido", http.StatusInternalServerError)
+	recortes, err := proceso.ProcesoDeLineas(lines)
+	if err != nil {
+		http.Error(w, "Error al procesar recortes: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.Write(contenido)
-}
+	// 4. Guardar en SQLite específica para este archivo
+	nombreDB := strings.TrimSuffix(handler.Filename, ".txt") + ".db"
+	dbPath := filepath.Join(outputDir, nombreDB)
 
-// Función auxiliar para extraer el autor de una línea
-func extraerAutor(linea string) string {
-	// Buscar texto entre paréntesis
-	inicio := strings.Index(linea, "(")
-	fin := strings.Index(linea, ")")
+	db, err := sql.Open("sqlite3", dbPath)
+	if err != nil {
+		http.Error(w, "Error al abrir DB: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	defer db.Close()
 
-	if inicio >= 0 && fin > inicio {
-		return strings.TrimSpace(linea[inicio+1 : fin])
+	// Crear tablas si no existen
+	if err := crearTablas(db); err != nil {
+		http.Error(w, "Error al crear tablas: "+err.Error(), http.StatusInternalServerError)
+		return
 	}
 
-	return ""
-}
-
-// Función auxiliar para extraer números de una línea
-func extraerNumero(linea, palabra string) string {
-	indice := strings.Index(linea, palabra)
-	if indice < 0 {
-		return ""
+	// Transacción para insertar datos
+	tx, err := db.Begin()
+	if err != nil {
+		http.Error(w, "Error al iniciar transacción: "+err.Error(), http.StatusInternalServerError)
+		return
 	}
 
-	// Buscar el número después de la palabra
-	resto := linea[indice+len(palabra):]
-	var numero strings.Builder
+	if err := insertarRecortes(tx, recortes, handler.Filename); err != nil {
+		tx.Rollback()
+		http.Error(w, "Error al insertar datos: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
 
-	for _, r := range resto {
-		if unicode.IsDigit(r) {
-			numero.WriteRune(r)
-		} else if numero.Len() > 0 && !unicode.IsDigit(r) {
-			break
+	if err := tx.Commit(); err != nil {
+		http.Error(w, "Error al confirmar transacción: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	http.Redirect(w, r, "/", http.StatusSeeOther)
+	json.NewEncoder(w).Encode(map[string]string{
+		"mensaje":       "Archivo procesado correctamente",
+		"base_de_datos": dbPath,
+	})
+}
+
+// Función para crear tablas
+func crearTablas(db *sql.DB) error {
+	queries := []string{
+		`CREATE TABLE IF NOT EXISTS recortes (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			autor TEXT,
+			nombre TEXT,
+			contenido TEXT,
+			pagina INTEGER,
+			visibilidad BOOLEAN DEFAULT 1,
+			fecha TEXT,
+			hora TEXT,
+			nombreRecorte TEXT,
+			favorito BOOLEAN DEFAULT 0,
+			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+		)`,
+		`CREATE TABLE IF NOT EXISTS etiquetas (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			nombre TEXT UNIQUE
+		)`,
+		`CREATE TABLE IF NOT EXISTS recortes_etiquetas (
+			recorte_id INTEGER,
+			etiqueta_id INTEGER,
+			FOREIGN KEY (recorte_id) REFERENCES recortes(id) ON DELETE CASCADE,
+			FOREIGN KEY (etiqueta_id) REFERENCES etiquetas(id) ON DELETE CASCADE,
+			PRIMARY KEY (recorte_id, etiqueta_id)
+		)`,
+	}
+
+	for _, query := range queries {
+		if _, err := db.Exec(query); err != nil {
+			return fmt.Errorf("error al ejecutar query %q: %v", query, err)
 		}
 	}
+	return nil
+}
 
-	return numero.String()
+// Función para insertar recortes
+func insertarRecortes(tx *sql.Tx, recortes []modelos.Recorte, nombreArchivo string) error {
+	nombreBase := strings.TrimSuffix(nombreArchivo, ".txt")
+
+	for _, recorte := range recortes {
+		// Insertar recorte principal
+		res, err := tx.Exec(`
+			INSERT INTO recortes (
+				autor, nombre, contenido, pagina, fecha, hora, 
+				favorito, nombreRecorte, visibilidad
+			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			recorte.Autor,
+			recorte.Nombre,
+			recorte.Contenido,
+			recorte.Pagina,
+			recorte.FechaStr,
+			recorte.HoraStr,
+			recorte.Favorito,
+			nombreBase,
+			true, // visibilidad por defecto
+		)
+		if err != nil {
+			return err
+		}
+
+		recorteID, err := res.LastInsertId()
+		if err != nil {
+			return err
+		}
+
+		// Insertar etiquetas
+		for _, etiqueta := range recorte.Etiquetas {
+			// Insertar etiqueta si no existe
+			_, err := tx.Exec(
+				"INSERT OR IGNORE INTO etiquetas (nombre) VALUES (?)",
+				etiqueta.Nombre,
+			)
+			if err != nil {
+				return err
+			}
+
+			// Relacionar recorte con etiqueta
+			_, err = tx.Exec(
+				`INSERT INTO recortes_etiquetas (recorte_id, etiqueta_id)
+				VALUES (?, (SELECT id FROM etiquetas WHERE nombre = ?))`,
+				recorteID,
+				etiqueta.Nombre,
+			)
+			if err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// ObtenerDatosHandler modificado para usar DB específica
+func ObtenerDatosHandler(w http.ResponseWriter, r *http.Request) {
+	nombreArchivo := r.URL.Query().Get("archivo")
+	if nombreArchivo == "" {
+		http.Error(w, "Parámetro 'archivo' es requerido", http.StatusBadRequest)
+		return
+	}
+
+	dbPath := filepath.Join("datos", "salida", nombreArchivo+".db")
+	if _, err := os.Stat(dbPath); os.IsNotExist(err) {
+		http.Error(w, "Base de datos no encontrada", http.StatusNotFound)
+		return
+	}
+
+	db, err := sql.Open("sqlite3", dbPath)
+	if err != nil {
+		http.Error(w, "Error al abrir la base de datos", http.StatusInternalServerError)
+		return
+	}
+	defer db.Close()
+
+	// Consulta optimizada para la vista
+	rows, err := db.Query(`
+        SELECT 
+            r.id, r.autor, r.nombre, 
+            substr(r.contenido, 1, 100) as contenido_preview,
+            r.pagina,
+            GROUP_CONCAT(e.nombre, ', ') as etiquetas
+        FROM recortes r
+        LEFT JOIN recortes_etiquetas re ON r.id = re.recorte_id
+        LEFT JOIN etiquetas e ON re.etiqueta_id = e.id
+        GROUP BY r.id
+        ORDER BY r.id
+    `)
+	if err != nil {
+		http.Error(w, "Error en consulta: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	var resultados []struct {
+		ID        int    `json:"id"`
+		Autor     string `json:"autor"`
+		Nombre    string `json:"nombre"`
+		Contenido string `json:"contenido"`
+		Pagina    int    `json:"pagina"`
+		Etiquetas string `json:"etiquetas"`
+	}
+
+	for rows.Next() {
+		var r struct {
+			ID        int
+			Autor     sql.NullString
+			Nombre    sql.NullString
+			Contenido sql.NullString
+			Pagina    sql.NullInt64
+			Etiquetas sql.NullString
+		}
+
+		if err := rows.Scan(&r.ID, &r.Autor, &r.Nombre, &r.Contenido, &r.Pagina, &r.Etiquetas); err != nil {
+			http.Error(w, "Error al leer datos: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		resultados = append(resultados, struct {
+			ID        int    `json:"id"`
+			Autor     string `json:"autor"`
+			Nombre    string `json:"nombre"`
+			Contenido string `json:"contenido"`
+			Pagina    int    `json:"pagina"`
+			Etiquetas string `json:"etiquetas"`
+		}{
+			ID:        r.ID,
+			Autor:     r.Autor.String,
+			Nombre:    r.Nombre.String,
+			Contenido: r.Contenido.String,
+			Pagina:    int(r.Pagina.Int64),
+			Etiquetas: r.Etiquetas.String,
+		})
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(resultados)
+}
+
+// ListarBasesDeDatosHandler devuelve la lista de archivos .db
+func ListarBasesDeDatosHandler(w http.ResponseWriter, r *http.Request) {
+	archivos, err := filepath.Glob("datos/salida/*.db") //Todos los que terminan en .db
+	if err != nil {
+		http.Error(w, "Error al leer archivos: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// Extraer solo los nombres sin ruta ni extensión
+	var nombres []string
+	for _, archivo := range archivos {
+		nombre := filepath.Base(archivo)
+		nombre = strings.TrimSuffix(nombre, ".db")
+		nombres = append(nombres, nombre)
+	}
+
+	// Devuelvo todo como json
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(nombres)
+}
+
+// Estructura para pasar datos al template
+type TablaData struct {
+	Recortes []RecorteTabla
+	Pagina   int
+	Total    int
+}
+
+type RecorteTabla struct {
+	ID        int
+	Autor     string
+	Nombre    string
+	Contenido string
+	Pagina    int
+	Etiquetas []modelos.Etiqueta
+}
+
+func ConfigurarTablasRouter(r *mux.Router) {
+	r.HandleFunc("/tabla", MostrarTablaHandler).Methods("GET")
+	r.HandleFunc("/api/tabla", ObtenerDatosTablaHandler).Methods("GET")
+}
+
+func MostrarTablaHandler(w http.ResponseWriter, r *http.Request) {
+	tmpl, err := template.ParseFiles(
+		"templates/index.html",
+		"templates/tabla.html",
+	)
+	if err != nil {
+		log.Printf("Error al parsear templates: %v", err)
+		http.Error(w, "Error interno", http.StatusInternalServerError)
+		return
+	}
+
+	err = tmpl.ExecuteTemplate(w, "index.html", nil)
+	if err != nil {
+		log.Printf("Error al renderizar template: %v", err)
+		http.Error(w, "Error interno", http.StatusInternalServerError)
+	}
+}
+
+func ObtenerDatosTablaHandler(w http.ResponseWriter, r *http.Request) {
+	// Obtener parámetros
+	nombreArchivo := r.URL.Query().Get("archivo")
+	pagina, _ := strconv.Atoi(r.URL.Query().Get("pagina"))
+	if pagina < 1 {
+		pagina = 1
+	}
+	porPagina := 10 // Items por página
+
+	// Abrir la base de datos
+	dbPath := filepath.Join("datos", "salida", nombreArchivo+".db")
+	db, err := sql.Open("sqlite3", dbPath)
+	if err != nil {
+		http.Error(w, "Error al abrir la base de datos", http.StatusInternalServerError)
+		return
+	}
+	defer db.Close()
+
+	// Consulta con paginación
+	offset := (pagina - 1) * porPagina
+	query := `
+		SELECT 
+			r.id, r.autor, r.nombre, r.contenido, r.pagina,
+			(SELECT GROUP_CONCAT(e.nombre, ', ') 
+			FROM etiquetas e
+			JOIN recortes_etiquetas re ON e.id = re.etiqueta_id
+			WHERE re.recorte_id = r.id) as etiquetas
+		FROM recortes r
+		ORDER BY r.id
+		LIMIT ? OFFSET ?
+	`
+
+	rows, err := db.Query(query, porPagina, offset)
+	if err != nil {
+		http.Error(w, "Error en consulta: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	var recortes []RecorteTabla
+	for rows.Next() {
+		var r RecorteTabla
+		var etiquetasStr sql.NullString
+
+		err := rows.Scan(
+			&r.ID, &r.Autor, &r.Nombre, &r.Contenido, &r.Pagina, &etiquetasStr,
+		)
+		if err != nil {
+			http.Error(w, "Error al leer datos: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		// Procesar etiquetas
+		if etiquetasStr.Valid {
+			etiquetas := strings.Split(etiquetasStr.String, ", ")
+			for _, nombre := range etiquetas {
+				if nombre != "" {
+					r.Etiquetas = append(r.Etiquetas, modelos.Etiqueta{Nombre: nombre})
+				}
+			}
+		}
+
+		recortes = append(recortes, r)
+	}
+
+	// Obtener total de registros para paginación
+	var total int
+	db.QueryRow("SELECT COUNT(*) FROM recortes").Scan(&total)
+
+	// Renderizar solo el fragmento de tabla
+	tmpl, err := template.ParseFiles("templates/tabla.html")
+	if err != nil {
+		http.Error(w, "Error al parsear template", http.StatusInternalServerError)
+		return
+	}
+
+	data := TablaData{
+		Recortes: recortes,
+		Pagina:   pagina,
+		Total:    total,
+	}
+
+	w.Header().Set("Content-Type", "text/html")
+	err = tmpl.Execute(w, data)
+	if err != nil {
+		http.Error(w, "Error al renderizar tabla", http.StatusInternalServerError)
+	}
 }
