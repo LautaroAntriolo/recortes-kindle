@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"recortesKindle/paquetes/crudf"
 	"recortesKindle/rutas"
 
 	"github.com/gorilla/mux"
@@ -29,7 +30,7 @@ func main() {
 	//No chequedas
 	r.HandleFunc("/similitudes/{palabra}", rutas.Similitudes)
 	r.HandleFunc("/archivo/{nombre}", rutas.ObtenerArchivoHandler).Methods("GET")
-	
+	r.HandleFunc("/archivo/{nombre}/{id}/favorito", crudf.Favoritos).Methods("GET", "POST", "PUT")
 
 	fmt.Println("🚀 Servidor iniciado en http://localhost:8080")
 	if err := http.ListenAndServe(":8080", r); err != nil {

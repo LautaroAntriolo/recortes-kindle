@@ -88,3 +88,4 @@ func Similitudes(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "error enviando resultados", http.StatusInternalServerError)
 	}
 }
+

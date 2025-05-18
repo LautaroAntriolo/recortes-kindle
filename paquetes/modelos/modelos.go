@@ -58,3 +58,23 @@ type Registro struct {
 }
 
 type Registros []Registro
+type Etiqueta struct {
+	Nombre string `json:"nombre"` // Mejor usar nombre en español en lugar de eti_nombre
+}
+
+type Etiquetas []Etiqueta // Esto está bien, es un slice de Etiqueta
+
+// Recorte representa un recorte procesado.
+type Recorte struct {
+	ID          int       `json:"id"`
+	Autor       string    `json:"autor"`
+	Nombre      string    `json:"nombre"`
+	Pagina      int       `json:"pagina"`
+	Contenido   string    `json:"contenido"`
+	Visibilidad bool      `json:"visibilidad"`
+	FechaStr    string    `json:"fecha"`     // Fecha formateada como string (YYYY-MM-DD)
+	HoraStr     string    `json:"hora"`      // Hora formateada como string (HH:MM:SS)
+	DateTime    time.Time `json:"-"`         // Campo interno para cálculos (no se serializa a JSON)
+	Etiquetas   Etiquetas `json:"etiquetas"` // Ahora es un slice de Etiqueta
+	Favorito    bool      `json:"favorito"`  // Campo para marcar como favorito
+}

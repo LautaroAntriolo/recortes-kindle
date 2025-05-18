@@ -73,7 +73,7 @@ function configurarSelectorArchivos() {
 function mostrarDatosEnTabla(datos) {
     const tbody = document.getElementById('tabla-recortes');
     tbody.innerHTML = ''; // Limpiar tabla existente
-    
+
     // Verificar si los datos son válidos
     if (!Array.isArray(datos)) {
         console.error('Datos no válidos:', datos);
@@ -89,21 +89,21 @@ function mostrarDatosEnTabla(datos) {
                 }
             }
         }
-        
+
         // Si aún no es un array, intentar envolverlo
         if (!Array.isArray(datos)) {
             console.log('Intentando convertir a array');
             datos = [datos];
         }
     }
-    
+
     // Llenar la tabla con los datos
     datos.forEach(item => {
         const fila = document.createElement('tr');
-        
+
         // Formatear fecha y hora
         const fechaHora = `${item.fecha || ''} ${item.hora || ''}`.trim();
-        
+
         // Crear celdas para cada campo
         fila.innerHTML = `
             <td>${item.autor || 'Sin autor'}</td>
@@ -116,34 +116,45 @@ function mostrarDatosEnTabla(datos) {
             <td class="acciones">
                 <button class="btn-accion ver" data-id="${item.id || ''}"><a href="#">👁️</a></button>
                 <button class="btn-accion etiquetar" data-id="${item.id || ''}"><a href="#">🏷️</a></button>
-                <button class="btn-accion editar" data-id="${item.id || ''}"><a href="#">😍</a></button>
-                <button class="btn-accion eliminar" data-id="${item.id || ''}"><a href="#">😎</a></button>
-                ${item.visibilidad !== undefined ? 
-                    (item.visibilidad ? 
-                    '<span class="badge visible">Visible</span>' : 
-                    '<span class="badge oculto">Oculto</span>') :
-                    '<span class="badge">-</span>'}
+                <button class="btn-accion editar" data-id="${item.id || ''}"><a href="#">🖌️</a></button>
+                <button class="btn-accion eliminar" data-id="${item.id || ''}"><a href="#">🗑️</a></button>
+                <button class="btn-accion favorito" data-id="123"><a href="#">❤️</a></button>
+                ${item.visibilidad !== undefined ?
+                (item.visibilidad ?
+                    '<span class="badge visible"><button class="btn-accion visible" data-id="${item.id || ""}"><a href="#">🙉</a></button></span>' :
+                    '<span class="badge oculto"><button class="btn-accion oculto" data-id="${item.id || ""}"><a href="#">🙈</a></button></span>') :
+                '<span class="badge">-</span>'}
             </td>
         `;
-        
+
         tbody.appendChild(fila);
     });
-    
+    document.querySelectorAll('.btn-accion.favorito').forEach(button => {
+        button.addEventListener('click', () => {
+            const id = button.getAttribute('data-id');
+            const archivo = document.getElementById('selector-archivos').value;
+            marcarFavorito(id, archivo);
+        });
+    });
+
     // Agregar event listeners a los botones
     document.querySelectorAll('.btn-accion.ver').forEach(btn => {
         btn.addEventListener('click', () => verDetalleCompleto(btn.dataset.id));
     });
-    
+
     document.querySelectorAll('.btn-accion.etiquetar').forEach(btn => {
         btn.addEventListener('click', () => gestionarEtiquetas(btn.dataset.id));
     });
-    
+
     document.querySelectorAll('.btn-accion.editar').forEach(btn => {
         btn.addEventListener('click', () => editarElemento(btn.dataset.id));
     });
 
     document.querySelectorAll('.btn-accion.eliminar').forEach(btn => {
         btn.addEventListener('click', () => eliminarElemento(btn.dataset.id));
+    });
+    document.querySelectorAll('.btn-accion.favorito').forEach(btn => {
+        btn.addEventListener('click', () => marcarFavorito(btn.dataset.id));
     });
 }
 
@@ -171,10 +182,45 @@ function eliminarElemento(id) {
     // Aquí puedes implementar un selector de etiquetas
 }
 
+async function marcarFavorito(id, archivoSeleccionado) {
+    console.log('Toggling favorito para ID:', id);
+
+    if (!archivoSeleccionado) {
+        alert("No se ha seleccionado ningún archivo.");
+        return;
+    }
+
+    const botonFavorito = document.querySelector(`.btn-accion.favorito[data-id="${id}"]`);
+    const enlace = botonFavorito?.querySelector('a');
+
+    if (!botonFavorito || !enlace) {
+        console.warn("No se encontró el botón favorito o el enlace.");
+        return;
+    }
+
+    try {
+        const response = await fetch(`/archivo/${encodeURIComponent(archivoSeleccionado)}/${encodeURIComponent(id)}/favorito`, {
+            method: 'POST'
+        });
+
+        if (!response.ok) {
+            throw new Error(`Error ${response.status}: ${response.statusText}`);
+        }
+
+        const data = await response.json();
+        enlace.innerHTML = data.favorito ? '❤️' : '🤍';
+
+    } catch (error) {
+        console.error('Error al actualizar favorito:', error);
+        alert('Error al actualizar favorito: ' + error.message);
+    }
+}
+
+
 // Inicialización cuando el DOM esté listo
-document.addEventListener('DOMContentLoaded', function() {
+document.addEventListener('DOMContentLoaded', function () {
     configurarSelectorArchivos();
-    
+
     // Cargar lista de archivos (tu código existente)
     fetch('/mostrar-archivos')
         .then(response => response.json())
