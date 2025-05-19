@@ -62,7 +62,7 @@ type Etiqueta struct {
 	Nombre string `json:"nombre"` // Mejor usar nombre en español en lugar de eti_nombre
 }
 
-type Etiquetas []Etiqueta // Esto está bien, es un slice de Etiqueta
+type Etiquetas []Etiqueta
 
 // Recorte representa un recorte procesado.
 type Recorte struct {

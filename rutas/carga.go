@@ -5,18 +5,15 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"os"
 	"path/filepath"
 	"recortesKindle/paquetes/lectura"
 	"recortesKindle/paquetes/modelos"
 	"recortesKindle/paquetes/proceso"
-	"strconv"
 	"strings"
 	"text/template"
 
-	"github.com/gorilla/mux"
 	_ "github.com/mattn/go-sqlite3"
 )
 
@@ -24,6 +21,103 @@ const (
 	uploadDir = "./datos/entrada"
 	outputDir = "./datos/salida"
 )
+
+func Inicio(w http.ResponseWriter, r *http.Request) {
+	archivo := r.URL.Query().Get("archivo")
+
+	var recortes []modelos.Recorte
+
+	if archivo != "" {
+		dbPath := filepath.Join("datos", "salida", archivo)
+		if _, err := os.Stat(dbPath); os.IsNotExist(err) {
+			http.Error(w, "Base de datos no encontrada", http.StatusNotFound)
+			return
+		}
+
+		db, err := sql.Open("sqlite3", dbPath)
+		if err != nil {
+			http.Error(w, "Error al abrir la base de datos", http.StatusInternalServerError)
+			return
+		}
+		defer db.Close()
+
+		rows, err := db.Query(`
+			SELECT 
+				r.id, r.autor, r.nombre, 
+				substr(r.contenido, 1, 100) as contenido_preview,
+				r.pagina,
+				GROUP_CONCAT(e.nombre, ', ') as etiquetas
+			FROM recortes r
+			LEFT JOIN recortes_etiquetas re ON r.id = re.recorte_id
+			LEFT JOIN etiquetas e ON re.etiqueta_id = e.id
+			GROUP BY r.id
+			ORDER BY r.id
+		`)
+		if err != nil {
+			http.Error(w, "Error en consulta: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		defer rows.Close()
+
+		for rows.Next() {
+			var r modelos.Recorte
+			var autor, nombre, contenido, etiquetas sql.NullString
+			var pagina sql.NullInt64
+
+			if err := rows.Scan(&r.ID, &autor, &nombre, &contenido, &pagina, &etiquetas); err != nil {
+				http.Error(w, "Error al leer datos: "+err.Error(), http.StatusInternalServerError)
+				return
+			}
+
+			r.Autor = autor.String
+			r.Nombre = nombre.String
+			r.Contenido = contenido.String
+			r.Pagina = int(pagina.Int64)
+			r.Visibilidad = true
+			r.FechaStr = ""
+			r.HoraStr = ""
+			r.NombreRecorte = ""
+			r.Favorito = false
+			r.Etiquetas = nil
+
+			// Asignar etiquetas si existen
+			if etiquetas.Valid {
+				etiquetasList := strings.Split(etiquetas.String, ",")
+				for _, nombre := range etiquetasList {
+					nombre = strings.TrimSpace(nombre)
+					if nombre == "" {
+						continue
+					}
+					r.Etiquetas = append(r.Etiquetas, modelos.Etiqueta{Nombre: nombre})
+				}
+			}
+
+			recortes = append(recortes, r)
+		}
+
+	}
+
+	// Renderizar plantilla
+	tmpl, err := template.ParseFiles("templates/index.html", "templates/tabla.html")
+	if err != nil {
+		http.Error(w, "Error al cargar plantillas: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	data := struct {
+		Titulo   string
+		Recortes []modelos.Recorte
+	}{
+		Titulo:   "Mis Recortes",
+		Recortes: recortes,
+	}
+
+	err = tmpl.Execute(w, data)
+	if err != nil {
+		http.Error(w, "Error al renderizar plantilla: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+}
 
 // Eliminamos la variable global db, cada handler manejará su propia conexión
 
@@ -231,7 +325,6 @@ func ObtenerDatosHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	defer db.Close()
 
-	// Consulta optimizada para la vista
 	rows, err := db.Query(`
         SELECT 
             r.id, r.autor, r.nombre, 
@@ -250,196 +343,74 @@ func ObtenerDatosHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	defer rows.Close()
 
-	var resultados []struct {
-		ID        int    `json:"id"`
-		Autor     string `json:"autor"`
-		Nombre    string `json:"nombre"`
-		Contenido string `json:"contenido"`
-		Pagina    int    `json:"pagina"`
-		Etiquetas string `json:"etiquetas"`
+	type Recorte struct {
+		ID        int
+		Autor     string
+		Nombre    string
+		Contenido string
+		Pagina    int
+		Etiquetas string
 	}
 
-	for rows.Next() {
-		var r struct {
-			ID        int
-			Autor     sql.NullString
-			Nombre    sql.NullString
-			Contenido sql.NullString
-			Pagina    sql.NullInt64
-			Etiquetas sql.NullString
-		}
+	var recortes []Recorte
 
-		if err := rows.Scan(&r.ID, &r.Autor, &r.Nombre, &r.Contenido, &r.Pagina, &r.Etiquetas); err != nil {
+	for rows.Next() {
+		var r Recorte
+		var autor, nombre, contenido, etiquetas sql.NullString
+		var pagina sql.NullInt64
+
+		if err := rows.Scan(&r.ID, &autor, &nombre, &contenido, &pagina, &etiquetas); err != nil {
 			http.Error(w, "Error al leer datos: "+err.Error(), http.StatusInternalServerError)
 			return
 		}
 
-		resultados = append(resultados, struct {
-			ID        int    `json:"id"`
-			Autor     string `json:"autor"`
-			Nombre    string `json:"nombre"`
-			Contenido string `json:"contenido"`
-			Pagina    int    `json:"pagina"`
-			Etiquetas string `json:"etiquetas"`
-		}{
-			ID:        r.ID,
-			Autor:     r.Autor.String,
-			Nombre:    r.Nombre.String,
-			Contenido: r.Contenido.String,
-			Pagina:    int(r.Pagina.Int64),
-			Etiquetas: r.Etiquetas.String,
-		})
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(resultados)
-}
-
-// ListarBasesDeDatosHandler devuelve la lista de archivos .db
-func ListarBasesDeDatosHandler(w http.ResponseWriter, r *http.Request) {
-	archivos, err := filepath.Glob("datos/salida/*.db") //Todos los que terminan en .db
-	if err != nil {
-		http.Error(w, "Error al leer archivos: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	// Extraer solo los nombres sin ruta ni extensión
-	var nombres []string
-	for _, archivo := range archivos {
-		nombre := filepath.Base(archivo)
-		nombre = strings.TrimSuffix(nombre, ".db")
-		nombres = append(nombres, nombre)
-	}
-
-	// Devuelvo todo como json
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(nombres)
-}
-
-// Estructura para pasar datos al template
-type TablaData struct {
-	Recortes []RecorteTabla
-	Pagina   int
-	Total    int
-}
-
-type RecorteTabla struct {
-	ID        int
-	Autor     string
-	Nombre    string
-	Contenido string
-	Pagina    int
-	Etiquetas []modelos.Etiqueta
-}
-
-func ConfigurarTablasRouter(r *mux.Router) {
-	r.HandleFunc("/tabla", MostrarTablaHandler).Methods("GET")
-	r.HandleFunc("/api/tabla", ObtenerDatosTablaHandler).Methods("GET")
-}
-
-func MostrarTablaHandler(w http.ResponseWriter, r *http.Request) {
-	tmpl, err := template.ParseFiles(
-		"templates/index.html",
-		"templates/tabla.html",
-	)
-	if err != nil {
-		log.Printf("Error al parsear templates: %v", err)
-		http.Error(w, "Error interno", http.StatusInternalServerError)
-		return
-	}
-
-	err = tmpl.ExecuteTemplate(w, "index.html", nil)
-	if err != nil {
-		log.Printf("Error al renderizar template: %v", err)
-		http.Error(w, "Error interno", http.StatusInternalServerError)
-	}
-}
-
-func ObtenerDatosTablaHandler(w http.ResponseWriter, r *http.Request) {
-	// Obtener parámetros
-	nombreArchivo := r.URL.Query().Get("archivo")
-	pagina, _ := strconv.Atoi(r.URL.Query().Get("pagina"))
-	if pagina < 1 {
-		pagina = 1
-	}
-	porPagina := 10 // Items por página
-
-	// Abrir la base de datos
-	dbPath := filepath.Join("datos", "salida", nombreArchivo+".db")
-	db, err := sql.Open("sqlite3", dbPath)
-	if err != nil {
-		http.Error(w, "Error al abrir la base de datos", http.StatusInternalServerError)
-		return
-	}
-	defer db.Close()
-
-	// Consulta con paginación
-	offset := (pagina - 1) * porPagina
-	query := `
-		SELECT 
-			r.id, r.autor, r.nombre, r.contenido, r.pagina,
-			(SELECT GROUP_CONCAT(e.nombre, ', ') 
-			FROM etiquetas e
-			JOIN recortes_etiquetas re ON e.id = re.etiqueta_id
-			WHERE re.recorte_id = r.id) as etiquetas
-		FROM recortes r
-		ORDER BY r.id
-		LIMIT ? OFFSET ?
-	`
-
-	rows, err := db.Query(query, porPagina, offset)
-	if err != nil {
-		http.Error(w, "Error en consulta: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
-	defer rows.Close()
-
-	var recortes []RecorteTabla
-	for rows.Next() {
-		var r RecorteTabla
-		var etiquetasStr sql.NullString
-
-		err := rows.Scan(
-			&r.ID, &r.Autor, &r.Nombre, &r.Contenido, &r.Pagina, &etiquetasStr,
-		)
-		if err != nil {
-			http.Error(w, "Error al leer datos: "+err.Error(), http.StatusInternalServerError)
-			return
-		}
-
-		// Procesar etiquetas
-		if etiquetasStr.Valid {
-			etiquetas := strings.Split(etiquetasStr.String, ", ")
-			for _, nombre := range etiquetas {
-				if nombre != "" {
-					r.Etiquetas = append(r.Etiquetas, modelos.Etiqueta{Nombre: nombre})
-				}
-			}
-		}
+		r.Autor = autor.String
+		r.Nombre = nombre.String
+		r.Contenido = contenido.String
+		r.Pagina = int(pagina.Int64)
+		r.Etiquetas = etiquetas.String
 
 		recortes = append(recortes, r)
 	}
 
-	// Obtener total de registros para paginación
-	var total int
-	db.QueryRow("SELECT COUNT(*) FROM recortes").Scan(&total)
-
-	// Renderizar solo el fragmento de tabla
-	tmpl, err := template.ParseFiles("templates/tabla.html")
+	tmpl, err := template.ParseFiles("templates/index.html", "templates/tabla.html")
 	if err != nil {
-		http.Error(w, "Error al parsear template", http.StatusInternalServerError)
+		http.Error(w, "Error al parsear plantillas: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	data := TablaData{
+	// Creamos los datos para la plantilla
+	data := struct {
+		Titulo   string
+		Recortes []Recorte
+	}{
+		Titulo:   "Resultados de Búsqueda",
 		Recortes: recortes,
-		Pagina:   pagina,
-		Total:    total,
 	}
 
-	w.Header().Set("Content-Type", "text/html")
+	// Ejecutamos la plantilla principal (index.html)
 	err = tmpl.Execute(w, data)
 	if err != nil {
-		http.Error(w, "Error al renderizar tabla", http.StatusInternalServerError)
+		http.Error(w, "Error al renderizar plantilla: "+err.Error(), http.StatusInternalServerError)
+		return
 	}
+}
+
+// ListarBasesDeDatosHandler devuelve la lista de archivos .db
+func ListarBasesDeDatosHandler(w http.ResponseWriter, r *http.Request) {
+	files, err := os.ReadDir(filepath.Join("datos", "salida"))
+	if err != nil {
+		http.Error(w, "Error al leer directorio", http.StatusInternalServerError)
+		return
+	}
+
+	var basesDeDatos []string
+	for _, file := range files {
+		if filepath.Ext(file.Name()) == ".db" {
+			basesDeDatos = append(basesDeDatos, file.Name())
+		}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(basesDeDatos)
 }

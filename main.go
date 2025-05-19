@@ -1,10 +1,5 @@
-//go:build windows
-// +build windows
-
 package main
 
-// go:build windows
-//Subir estas dos lineas al inicio del archivo para evitar errores de compilación en Windows
 import (
 	"fmt"
 	"log"
